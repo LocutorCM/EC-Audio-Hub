@@ -147,11 +147,26 @@ function auth(req, res, next) {
    const customers = db.prepare("SELECT c.id,c.email,c.display_name AS displayName,c.created_at AS createdAt,s.status,s.plan,s.started_at AS startedAt,s.expires_at AS expiresAt,s.cancel_at_period_end AS cancelAtPeriodEnd,s.billing_interval AS billingInterval,(SELECT COUNT(*) FROM customer_devices d WHERE d.customer_id=c.id AND d.active=1) AS activeDevices FROM customer_accounts c LEFT JOIN customer_subscriptions s ON s.customer_id=c.id ORDER BY c.created_at DESC LIMIT 250").all();
    return res.json({ totals, customers });
  });
- app.post('/api/admin/licensing/customers/:customerId/revoke', auth, (req, res) => {
-   const now = new Date().toISOString();
-   const result = db.prepare("UPDATE customer_subscriptions SET status='canceled',expires_at=?,cancel_at_period_end=0,updated_at=? WHERE customer_id=?").run(now, now, req.params.customerId);
-   if (!result.changes) return res.status(404).json({ error: 'No se encontró una suscripción para esa cuenta.' });
-   return res.json({ revoked: true });
+ app.post('/api/admin/licensing/customers/:customerId/revoke', auth, async (req, res) => {
+   const subscription = db.prepare('SELECT stripe_subscription_id FROM customer_subscriptions WHERE customer_id=?').get(req.params.customerId);
+   if (!subscription) return res.status(404).json({ error: 'No se encontró una suscripción para esa cuenta.' });
+   try {
+     if (stripe && subscription.stripe_subscription_id) {
+       await stripe.subscriptions.cancel(subscription.stripe_subscription_id);
+     } else {
+       const now = new Date().toISOString();
+       db.prepare("UPDATE customer_subscriptions SET status='canceled',expires_at=?,cancel_at_period_end=0,updated_at=? WHERE customer_id=?")
+         .run(now, now, req.params.customerId);
+     }
+     return res.json({ revoked: true });
+   } catch {
+     return res.status(502).json({ error: 'No se pudo revocar la suscripción en Stripe.' });
+   }
+ });
+ app.get('/api/admin/licensing/customers/:customerId/devices', auth, (req, res) => {
+   const devices = db.prepare('SELECT device_id AS deviceId,device_name AS deviceName,platform,active,first_seen_at AS firstSeenAt,last_seen_at AS lastSeenAt FROM customer_devices WHERE customer_id=? ORDER BY last_seen_at DESC')
+     .all(req.params.customerId);
+   return res.json({ devices });
  });
  app.post('/api/admin/licensing/customers/:customerId/grant', auth, (req, res) => {
    const expiresAt = String(req.body?.expiresAt || '');
