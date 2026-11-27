@@ -2,7 +2,7 @@ import SwiftUI
 
 struct AccountSheet: View {
     @EnvironmentObject private var library: ClientLibrary
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\\.dismiss) private var dismiss
     @State private var email = ""
     @State private var password = ""
     @State private var displayName = ""
@@ -71,19 +71,24 @@ struct AccountSheet: View {
                 .disabled(library.isAccountBusy || email.trimmingCharacters(in: .whitespaces).isEmpty || password.count < 10)
             }
 
-            if library.accountEmail.isEmpty {
-                Button {
-                    if let url = URL(string: "https://locutorcm.github.io/EC-Audio-Hub/account.html?client=1") {
-                        NSWorkspace.shared.open(url)
-                    }
-                } label: {
-                    Label("Continuar en navegador · Google y más opciones", systemImage: "globe")
-                        .frame(maxWidth: .infinity)
+            Button {
+                let switchAccount = !library.accountEmail.isEmpty
+                let address = switchAccount
+                    ? "https://locutorcm.github.io/EC-Audio-Hub/account.html?client=1&switch=1"
+                    : "https://locutorcm.github.io/EC-Audio-Hub/account.html?client=1"
+                if let url = URL(string: address) {
+                    NSWorkspace.shared.open(url)
                 }
-                .buttonStyle(BlueButtonStyle())
-                Text("Se abrirá la misma página segura de EC Audio. Al terminar, volverás automáticamente a Client Hub.")
-                    .font(.system(size: 10)).foregroundColor(.secondary)
+            } label: {
+                Label(
+                    library.accountEmail.isEmpty ? "Más opciones · Google y correo" : "Cambiar cuenta · Google y más opciones",
+                    systemImage: "globe"
+                )
+                .frame(maxWidth: .infinity)
             }
+            .buttonStyle(BlueButtonStyle())
+            Text("Se abrirá la página segura de EC Audio. Al terminar, volverás automáticamente a Client Hub.")
+                .font(.system(size: 10)).foregroundColor(.secondary)
 
             Divider().overlay(Color.white.opacity(0.12))
             VStack(alignment: .leading, spacing: 7) {
