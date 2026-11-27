@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import AppKit
 
 struct AudioPlugin: Identifiable, Codable, Equatable {
@@ -12,7 +13,7 @@ struct AudioPlugin: Identifiable, Codable, Equatable {
     var notes: String
 
     var subtitle: String {
-        [manufacturer, version.isEmpty ? nil : "v\\(version)", format]
+        [manufacturer, version.isEmpty ? nil : "v\(version)", format]
             .compactMap { $0 }.joined(separator: " • ")
     }
 }
@@ -40,13 +41,13 @@ final class PluginLibrary: ObservableObject {
         }
         plugins.append(plugin)
         save()
-        statusMessage = "\\(plugin.name) agregado a tu biblioteca."
+        statusMessage = "\(plugin.name) agregado a tu biblioteca."
     }
 
     func remove(_ plugin: AudioPlugin) {
         plugins.removeAll { $0.id == plugin.id }
         save()
-        statusMessage = "\\(plugin.name) eliminado de la biblioteca."
+        statusMessage = "\(plugin.name) eliminado de la biblioteca."
     }
 
     func download(_ plugin: AudioPlugin) async {
@@ -75,10 +76,10 @@ final class PluginLibrary: ObservableObject {
             if fileManager.fileExists(atPath: destination.path) {
                 let stem = destination.deletingPathExtension().lastPathComponent
                 let ext = destination.pathExtension
-                destination = downloads.appendingPathComponent("\\(stem)-\\(Int(Date().timeIntervalSince1970)).\\(ext)")
+                destination = downloads.appendingPathComponent("\(stem)-\(Int(Date().timeIntervalSince1970)).\(ext)")
             }
             try fileManager.moveItem(at: temporaryURL, to: destination)
-            statusMessage = "Descarga completa: \\(destination.lastPathComponent)"
+            statusMessage = "Descarga completa: \(destination.lastPathComponent)"
             let ext = destination.pathExtension.lowercased()
             if ["pkg", "mpkg", "dmg"].contains(ext) {
                 // La instalación queda bajo confirmación explícita del usuario.
@@ -87,7 +88,7 @@ final class PluginLibrary: ObservableObject {
                 NSWorkspace.shared.activateFileViewerSelecting([destination])
             }
         } catch {
-            statusMessage = "Error al descargar \\(plugin.name): \\(error.localizedDescription)"
+            statusMessage = "Error al descargar \(plugin.name): \(error.localizedDescription)"
         }
     }
 
@@ -104,14 +105,14 @@ final class PluginLibrary: ObservableObject {
         do {
             try JSONEncoder().encode(plugins).write(to: catalogURL, options: .atomic)
         } catch {
-            statusMessage = "No se pudo guardar la biblioteca: \\(error.localizedDescription)"
+            statusMessage = "No se pudo guardar la biblioteca: \(error.localizedDescription)"
         }
     }
 
     enum DownloadError: LocalizedError {
         case badResponse(Int)
         var errorDescription: String? {
-            if case .badResponse(let code) = self { return "Respuesta HTTP \\(code)." }
+            if case .badResponse(let code) = self { return "Respuesta HTTP \(code)." }
             return "Error de descarga."
         }
     }
