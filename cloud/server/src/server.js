@@ -130,7 +130,8 @@ app.patch('/api/admin/users/:id', auth, adminOnly, (req, res) => {
   db.prepare('UPDATE users SET active=? WHERE id=?').run(req.body?.active === false ? 0 : 1, user.id);
   res.json({ ok: true });
 });
-\napp.get('/api/admin/plugins', auth, adminOnly, (_req, res) => {
+
+app.get('/api/admin/plugins', auth, adminOnly, (_req, res) => {
   const plugins = db.prepare(`SELECT ${publicFields} FROM plugins ORDER BY updated_at DESC`).all();
   res.json({ plugins: plugins.map(plugin => ({ ...plugin, published: Boolean(plugin.published) })) });
 });
@@ -196,7 +197,13 @@ app.post('/api/admin/plugins', auth, adminOnly, saveUpload, async (req, res) => 
   const destination = path.join(FILE_DIR, diskName);
   try {
     fs.renameSync(req.file.path, destination);
-    const hash = await new Promise((resolve, reject) => {\n      const digest = crypto.createHash('sha256');\n      const stream = fs.createReadStream(destination);\n      stream.on('data', chunk => digest.update(chunk));\n      stream.on('error', reject);\n      stream.on('end', () => resolve(digest.digest('hex')));\n    });
+    const hash = await new Promise((resolve, reject) => {
+      const digest = crypto.createHash('sha256');
+      const stream = fs.createReadStream(destination);
+      stream.on('data', chunk => digest.update(chunk));
+      stream.on('error', reject);
+      stream.on('end', () => resolve(digest.digest('hex')));
+    });
     const now = new Date().toISOString();
     db.prepare(`INSERT INTO plugins(id,name,manufacturer,version,category,description,changelog,file_name,disk_name,content_type,size_bytes,sha256,published,created_at,updated_at)
       VALUES(@id,@name,@manufacturer,@version,@category,@description,@changelog,@fileName,@diskName,@contentType,@sizeBytes,@sha256,@published,@now,@now)`)
