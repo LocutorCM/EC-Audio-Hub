@@ -23,6 +23,8 @@ jobs:
       - run: node --check src/server.js
       - run: node --check src/customer-accounts.js
       - run: npm test
+      - run: node --input-type=module --check < ../../docs/js/auth.js
+      - run: node --input-type=module --check < ../../docs/js/api-config.js
 
   macos-client:
     runs-on: macos-15-intel
