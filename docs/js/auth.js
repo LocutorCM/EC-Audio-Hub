@@ -115,8 +115,10 @@ function renderSubscription(subscription) {
       ? "Tu suscripción está programada para cancelarse al terminar el periodo actual."
       : "Tu licencia comercial está activa y sincronizada con EC Audio Client.";
     trialButton.hidden = true;
+    $("monthlyBtn").hidden = false;
     billingActions.hidden = false;
-    portalButton.hidden = false;
+    portalButton.hidden = true;
+    $("monthlyBtn").hidden = true;
   } else if (subscription.active) {
     status.textContent = "Prueba activa · " + subscription.remainingSeconds + " segundos restantes";
     details.textContent = "Tu acceso de prueba está guardado y se comparte con EC Audio Client.";
@@ -239,13 +241,7 @@ async function loadCustomerDevices(user) {
   } catch {}
 }
 
-$("monthlyBtn")?.addEventListener("click", () => startCheckout("monthly"));
-$("annualBtn")?.addEventListener("click", () => startCheckout("annual"));
-$("portalBtn")?.addEventListener("click", openBillingPortal);
-
-const checkoutResult = new URLSearchParams(window.location.search).get("checkout");
-if (checkoutResult === "success") say("Pago recibido. Estamos confirmando tu suscripción; actualiza el estado en unos segundos.", "ok");
-if (checkoutResult === "cancelled") say("El proceso de pago se canceló. No se realizó ningún cobro.");
+$("monthlyBtn")?.addEventListener("click", startKofiMembership);
 
 async function refreshSubscription() {
   const user = auth.currentUser;
