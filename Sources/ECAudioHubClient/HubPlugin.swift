@@ -35,6 +35,7 @@ struct HubPlugin: Identifiable {
     let downloadURL: URL
     let size: Int
     let releaseNotes: String
+    let imageURL: URL?
 
     var fileExtension: String {
         URL(fileURLWithPath: fileName).pathExtension.lowercased()
