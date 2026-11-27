@@ -144,8 +144,31 @@ final class UploadManager: ObservableObject {
                 throw UploadError.message("No se puede acceder al archivo seleccionado.")
             }
             let boundary = "EC-Audio-\(UUID().uuidString)"
-            try createMultipartFile(source: file, destination: temporaryBody, boundary: boundary)
-            defer { try? FileManager.default.removeItem(at: temporaryBody) }
+            let sourceIsDirectory = (try FileManager.default.attributesOfItem(atPath: file.path)[.type] as? FileAttributeType) == .typeDirectory
+            let uploadSource: URL
+            let uploadFileName: String
+            if sourceIsDirectory {
+                let archive = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(file.lastPathComponent + "-\(UUID().uuidString).zip")
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+                process.arguments = ["-c", "-k", "--sequesterRsrc", "--keepParent", file.path, archive.path]
+                try process.run()
+                process.waitUntilExit()
+                guard process.terminationStatus == 0 else {
+                    throw UploadError.message("No se pudo comprimir el plugin. Intenta crear un ZIP manualmente.")
+                }
+                uploadSource = archive
+                uploadFileName = file.lastPathComponent + ".zip"
+            } else {
+                uploadSource = file
+                uploadFileName = file.lastPathComponent
+            }
+            defer {
+                try? FileManager.default.removeItem(at: temporaryBody)
+                if sourceIsDirectory { try? FileManager.default.removeItem(at: uploadSource) }
+            }
+            try createMultipartFile(source: uploadSource, fileName: uploadFileName, destination: temporaryBody, boundary: boundary)
 
             guard let url = endpoint("api/admin/files") else {
                 throw UploadError.message("Configura una dirección HTTPS válida.")
