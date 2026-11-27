@@ -13,6 +13,7 @@ struct ReleaseAsset: Decodable {
 }
 
 struct GitHubRelease: Decodable {
+    let id: Int
     let tagName: String
     let name: String?
     let body: String?
@@ -21,6 +22,7 @@ struct GitHubRelease: Decodable {
     let prerelease: Bool
 
     enum CodingKeys: String, CodingKey {
+        case id
         case tagName = "tag_name"
         case name, body, assets, draft, prerelease
     }
