@@ -41,7 +41,7 @@ final class ClientLibrary: ObservableObject {
     var installedCount: Int { installedVersions.count }
 
     func installedVersion(for plugin: HubPlugin) -> String? {
-        installedVersions[plugin.id]
+        installedVersions[plugin.id] ?? installedVersions[plugin.name]
     }
 
     func refresh() async {
@@ -50,32 +50,23 @@ final class ClientLibrary: ObservableObject {
         defer { isRefreshing = false }
 
         do {
-            var request = URLRequest(url: URL(string: "https://api.github.com/repos/\(owner)/\(repository)/releases?per_page=100")!)
-            request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-            request.setValue("EC-Audio-Hub-Client", forHTTPHeaderField: "User-Agent")
-            if let etag = UserDefaults.standard.string(forKey: catalogETagKey) {
-                request.setValue(etag, forHTTPHeaderField: "If-None-Match")
+            var releases: [GitHubRelease] = []
+            var page = 1
+            while true {
+                var request = URLRequest(url: URL(string: "https://api.github.com/repos/\(owner)/\(repository)/releases?per_page=100&page=\(page)")!)
+                request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+                request.setValue("EC-Audio-Hub-Client", forHTTPHeaderField: "User-Agent")
+                request.timeoutInterval = 30
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse,
+                      (200...299).contains(http.statusCode) else {
+                    throw URLError(.badServerResponse)
+                }
+                let batch = try JSONDecoder().decode([GitHubRelease].self, from: data)
+                releases.append(contentsOf: batch)
+                if batch.count < 100 { break }
+                page += 1
             }
-            request.timeoutInterval = 30
-
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse else {
-                throw URLError(.badServerResponse)
-            }
-            // GitHub responde 304 cuando el catálogo no ha cambiado. Las peticiones
-            // condicionales evitan consumir el límite normal de consultas repetidas.
-            if http.statusCode == 304 {
-                status = "\(plugins.count) plugin(s) disponibles · Sin cambios."
-                return
-            }
-            guard (200...299).contains(http.statusCode) else {
-                throw URLError(.badServerResponse)
-            }
-            if let etag = http.value(forHTTPHeaderField: "ETag") {
-                UserDefaults.standard.set(etag, forKey: catalogETagKey)
-            }
-
-            let releases = try JSONDecoder().decode([GitHubRelease].self, from: data)
             var found: [HubPlugin] = []
 
             for release in releases where !release.draft && !release.prerelease {
