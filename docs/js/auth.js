@@ -1,17 +1,17 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-import {
-  getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail, updateProfile, signOut
-} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
-import { firebaseConfig } from "./firebase-config.js";
+import { API_BASE_URL } from "./api-config.js";
 
-const configured = firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith("PEGA_AQUI") &&
-  firebaseConfig.projectId && !firebaseConfig.projectId.startsWith("PEGA_AQUI") &&
-  firebaseConfig.appId && !firebaseConfig.appId.startsWith("PEGA_AQUI");
 const $ = (id) => document.getElementById(id);
-const authPanel = $("authPanel"), accountPanel = $("accountPanel"), message = $("message");
-let mode = "login", auth = null;
-function say(text, kind = "") { message.textContent = text; message.className = "note " + kind; }
+const authPanel = $("authPanel");
+const accountPanel = $("accountPanel");
+const message = $("message");
+let mode = "login";
+let token = sessionStorage.getItem("ecAudioCustomerToken") || "";
+
+function say(text, kind = "") {
+  if (!message) return;
+  message.textContent = text;
+  message.className = "note " + kind;
+}
 function setMode(next) {
   mode = next;
   $("loginTab").classList.toggle("active", mode === "login");
@@ -19,64 +19,99 @@ function setMode(next) {
   $("nameWrap").classList.toggle("hidden", mode !== "signup");
   $("submitBtn").textContent = mode === "signup" ? "Crear mi cuenta" : "Iniciar sesión";
   $("password").autocomplete = mode === "signup" ? "new-password" : "current-password";
+  $("password").minLength = 10;
   say("");
 }
 $("loginTab").addEventListener("click", () => setMode("login"));
 $("signupTab").addEventListener("click", () => setMode("signup"));
 
-function friendlyError(error) {
-  const map = {
-    "auth/email-already-in-use": "Ese correo ya tiene una cuenta. Inicia sesión.",
-    "auth/invalid-email": "El correo electrónico no es válido.",
-    "auth/weak-password": "La contraseña debe tener al menos 6 caracteres.",
-    "auth/invalid-credential": "Correo o contraseña incorrectos.",
-    "auth/popup-closed-by-user": "Se cerró la ventana de Google antes de terminar.",
-    "auth/popup-blocked": "El navegador bloqueó la ventana emergente. Permite las ventanas emergentes e inténtalo otra vez.",
-    "auth/unauthorized-domain": "Este dominio aún no está autorizado en Firebase Authentication.",
-    "auth/network-request-failed": "No se pudo conectar. Revisa tu conexión a internet."
-  };
-  return map[error.code] || "No se pudo completar la operación. " + (error.message || "");
+async function api(path, options = {}) {
+  if (!API_BASE_URL) throw new Error("El servidor de cuentas aún no está publicado. La web está preparada; falta configurar API_BASE_URL en js/api-config.js.");
+  const response = await fetch(API_BASE_URL.replace(/\/$/, "") + path, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: "Bearer " + token } : {}),
+      ...(options.headers || {})
+    }
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "No se pudo completar la solicitud.");
+  return data;
 }
-function showUser(user) {
-  if (!user) { authPanel.classList.remove("hidden"); accountPanel.classList.add("hidden"); return; }
-  authPanel.classList.add("hidden"); accountPanel.classList.remove("hidden");
+function showUser(user, subscription) {
+  authPanel.classList.add("hidden");
+  accountPanel.classList.remove("hidden");
   $("userEmail").textContent = user.email || "Correo no disponible";
   $("userName").textContent = user.displayName || "";
   $("avatar").textContent = (user.displayName || user.email || "EC").trim().charAt(0).toUpperCase();
+  updateSubscription(subscription);
 }
-if (!configured) {
-  $("submitBtn").disabled = true; $("googleBtn").disabled = true; $("forgotBtn").classList.add("hidden");
-  say("La interfaz está preparada. Falta conectar las credenciales del proyecto Firebase para activar el registro y el inicio de sesión.", "");
-} else {
-  const app = initializeApp(firebaseConfig); auth = getAuth(app);
-  onAuthStateChanged(auth, showUser);
-  $("authForm").addEventListener("submit", async (event) => {
-    event.preventDefault(); say("");
-    const email = $("email").value.trim(), password = $("password").value;
-    $("submitBtn").disabled = true;
-    try {
-      if (mode === "signup") {
-        const credential = await createUserWithEmailAndPassword(auth, email, password);
-        const name = $("displayName").value.trim();
-        if (name) await updateProfile(credential.user, { displayName: name });
-        say("Cuenta creada correctamente.", "ok");
-      } else {
-        await signInWithEmailAndPassword(auth, email, password);
-      }
-    } catch (error) { say(friendlyError(error), "error"); }
-    finally { $("submitBtn").disabled = false; }
+function updateSubscription(subscription) {
+  const active = !!subscription?.active;
+  $("subscriptionStatus").textContent = active
+    ? "Acceso de prueba activo · " + subscription.remainingSeconds + " segundos restantes"
+    : subscription?.status === "expired" ? "La prueba terminó" : "Sin suscripción activa";
+  $("activateTrialBtn").disabled = false;
+  $("activateTrialBtn").textContent = active ? "Activar de nuevo (prueba)" : "Activar prueba gratuita · $0 MXN";
+}
+async function loadAccount() {
+  const data = await api("/api/customer/auth/me");
+  showUser(data.user, data.subscription);
+}
+$("authForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  say("");
+  $("submitBtn").disabled = true;
+  try {
+    const payload = {
+      email: $("email").value.trim(),
+      password: $("password").value,
+      displayName: $("displayName").value.trim()
+    };
+    const data = await api(mode === "signup" ? "/api/customer/auth/register" : "/api/customer/auth/login", {
+      method: "POST", body: JSON.stringify(payload)
+    });
+    token = data.token;
+    sessionStorage.setItem("ecAudioCustomerToken", token);
+    showUser(data.user, data.subscription);
+    say("Sesión iniciada correctamente.", "ok");
+  } catch (error) {
+    say(error.message, "error");
+  } finally {
+    $("submitBtn").disabled = false;
+  }
+});
+$("activateTrialBtn").addEventListener("click", async () => {
+  $("activateTrialBtn").disabled = true;
+  say("");
+  try {
+    const data = await api("/api/customer/subscription/activate", { method: "POST", body: "{}" });
+    updateSubscription(data.subscription);
+    say(data.message || "Prueba activada.", "ok");
+  } catch (error) {
+    say(error.message, "error");
+  } finally {
+    $("activateTrialBtn").disabled = false;
+  }
+});
+$("signoutBtn").addEventListener("click", () => {
+  token = "";
+  sessionStorage.removeItem("ecAudioCustomerToken");
+  accountPanel.classList.add("hidden");
+  authPanel.classList.remove("hidden");
+  say("Sesión cerrada.");
+});
+$("googleBtn").classList.add("hidden");
+$("forgotBtn").classList.add("hidden");
+if (!API_BASE_URL) {
+  $("submitBtn").disabled = true;
+  $("googleBtn").classList.add("hidden");
+  say("El sistema de cuentas ya está preparado, pero falta publicar el servidor y configurar su dirección HTTPS en js/api-config.js.");
+} else if (token) {
+  loadAccount().catch((error) => {
+    token = "";
+    sessionStorage.removeItem("ecAudioCustomerToken");
+    say(error.message, "error");
   });
-  $("googleBtn").addEventListener("click", async () => {
-    say("");
-    try { await signInWithPopup(auth, new GoogleAuthProvider()); }
-    catch (error) { say(friendlyError(error), "error"); }
-  });
-  $("forgotBtn").addEventListener("click", async (event) => {
-    event.preventDefault();
-    const email = $("email").value.trim();
-    if (!email) { say("Escribe tu correo para enviarte el enlace de recuperación.", "error"); $("email").focus(); return; }
-    try { await sendPasswordResetEmail(auth, email); say("Si existe una cuenta con ese correo, recibirás un enlace para restablecer la contraseña.", "ok"); }
-    catch (error) { say(friendlyError(error), "error"); }
-  });
-  $("signoutBtn").addEventListener("click", async () => { try { await signOut(auth); } catch (error) { $("userName").textContent = friendlyError(error); } });
 }
