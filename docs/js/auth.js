@@ -240,9 +240,9 @@ $("signoutBtn").addEventListener("click", async () => {
   }
 });
 
-function returnToNativeClient(user) {
+function returnToNativeClient(user, force = false) {
   const params = new URLSearchParams(window.location.search);
-  if (params.get("client") !== "1") return false;
+  if (params.get("client") !== "1" && !force) return false;
   user.getIdToken().then((idToken) => {
     const callback = "ecaudiohub://auth#" + new URLSearchParams({
       idToken,
@@ -255,6 +255,11 @@ function returnToNativeClient(user) {
   }).catch((error) => say(friendlyError(error), "error"));
   return true;
 }
+
+$("openClientBtn")?.addEventListener("click", () => {
+  const user = auth.currentUser;
+  if (user) returnToNativeClient(user, true);
+});
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {
