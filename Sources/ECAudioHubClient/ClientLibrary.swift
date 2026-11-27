@@ -145,6 +145,10 @@ final class ClientLibrary: ObservableObject {
     }
 
     func downloadAndInstall(_ plugin: HubPlugin) async {
+        guard subscriptionActive, customerToken != nil else {
+            accountMessage = "Inicia sesión y activa tu licencia antes de instalar plugins."
+            return
+        }
         guard !downloadingIDs.contains(plugin.id) else { return }
         downloadingIDs.insert(plugin.id)
         defer { downloadingIDs.remove(plugin.id) }
@@ -543,7 +547,7 @@ final class ClientLibrary: ObservableObject {
     private func restoreManagedPlugins() throws {
         let manager = FileManager.default
         var suspended = UserDefaults.standard.dictionary(forKey: suspendedPluginsKey) as? [String: String] ?? [:]
-        for (originalPath, suspendedPath) in suspended {
+        for (originalPath, suspendedPath) in Array(suspended) {
             let original = URL(fileURLWithPath: originalPath).standardizedFileURL
             let source = URL(fileURLWithPath: suspendedPath).standardizedFileURL
             guard manager.fileExists(atPath: source.path) else {
