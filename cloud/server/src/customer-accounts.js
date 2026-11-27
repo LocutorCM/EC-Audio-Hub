@@ -316,6 +316,10 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
     const plan = String(req.body?.plan || '');
     const price = plan === 'monthly' ? stripeMonthlyPriceId : plan === 'annual' ? stripeAnnualPriceId : null;
     if (!price) return res.status(400).json({ error: 'Selecciona un plan mensual o anual válido.' });
+    const currentSubscription = subscriptionFor(req.customer.id);
+    if (currentSubscription.active && currentSubscription.plan !== 'trial') {
+      return res.status(409).json({ error: 'Ya tienes una suscripción comercial activa. Adminístrala desde el portal de facturación.' });
+    }
     try {
       const selectedPrice = await stripe.prices.retrieve(price);
       const expectedInterval = plan === 'annual' ? 'year' : 'month';
