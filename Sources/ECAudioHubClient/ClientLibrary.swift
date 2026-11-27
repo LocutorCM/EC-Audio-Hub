@@ -235,6 +235,66 @@ final class ClientLibrary: ObservableObject {
         return installedBundles
     }
 
+    var detectedInstalledPlugins: [InstalledPlugin] {
+        let root = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Audio/Plug-Ins", isDirectory: true)
+            .standardizedFileURL
+        var result: [InstalledPlugin] = []
+        for folderName in ["VST3", "Components"] {
+            let folder = root.appendingPathComponent(folderName, isDirectory: true)
+            let urls = (try? FileManager.default.contentsOfDirectory(
+                at: folder, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]
+            )) ?? []
+            for url in urls {
+                let ext = url.pathExtension.lowercased()
+                guard ext == "vst3" || ext == "component" else { continue }
+                let path = url.standardizedFileURL.path
+                let owner = installedPaths.first(where: { $0.value.contains(path) })?.key
+                let version = owner.flatMap { installedVersions[$0] }
+                result.append(InstalledPlugin(
+                    id: path,
+                    name: url.deletingPathExtension().lastPathComponent,
+                    format: ext == "vst3" ? "VST3" : "Audio Unit",
+                    version: version,
+                    path: path
+                ))
+            }
+        }
+        return result.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    func uninstallBundle(at rawPath: String) throws {
+        let fileManager = FileManager.default
+        let root = fileManager.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Audio/Plug-Ins", isDirectory: true).standardizedFileURL
+        let url = URL(fileURLWithPath: rawPath).standardizedFileURL
+        let parent = url.deletingLastPathComponent()
+        let allowedParents = [
+            root.appendingPathComponent("VST3", isDirectory: true),
+            root.appendingPathComponent("Components", isDirectory: true)
+        ]
+        let ext = url.pathExtension.lowercased()
+        guard allowedParents.contains(parent), ext == "vst3" || ext == "component" else {
+            throw ClientInstallError.invalidUninstallPath
+        }
+        guard fileManager.fileExists(atPath: url.path) else {
+            throw ClientInstallError.installedBundleNotFound(url.lastPathComponent)
+        }
+        try fileManager.removeItem(at: url)
+        for (name, paths) in installedPaths {
+            let remaining = paths.filter { $0 != url.path }
+            if remaining.isEmpty {
+                installedPaths.removeValue(forKey: name)
+                installedVersions.removeValue(forKey: name)
+            } else {
+                installedPaths[name] = remaining
+            }
+        }
+        UserDefaults.standard.set(installedPaths, forKey: installedPathsKey)
+        UserDefaults.standard.set(installedVersions, forKey: installedKey)
+        status = "\(url.deletingPathExtension().lastPathComponent) se desinstaló correctamente."
+    }
+
     func uninstallPlugin(named name: String) throws {
         let fileManager = FileManager.default
         let root = fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Audio/Plug-Ins", isDirectory: true).standardizedFileURL
@@ -283,13 +343,23 @@ enum ClientInstallError: LocalizedError {
     case archiveExtractionFailed
     case noPluginBundle
     case installedBundleNotFound(String)
+    case invalidUninstallPath
 
     var errorDescription: String? {
         switch self {
         case .checksumMismatch: return "La verificación SHA-256 no coincide. El archivo se rechazó por seguridad."
         case .archiveExtractionFailed: return "No se pudo extraer el ZIP."
         case .noPluginBundle: return "El ZIP no contiene un paquete AU (.component) o VST3 (.vst3)."
-        case .installedBundleNotFound(let name): return "No encontré los archivos instalados de \(name). Comprueba el nombre del bundle del plugin."
+        case .installedBundleNotFound(let name): return "No encontré los archivos instalados de \(name)."
+        case .invalidUninstallPath: return "Por seguridad, solo se pueden eliminar plugins dentro de las carpetas VST3 y Components de tu usuario."
         }
     }
+}
+
+struct InstalledPlugin: Identifiable {
+    let id: String
+    let name: String
+    let format: String
+    let version: String?
+    let path: String
 }
