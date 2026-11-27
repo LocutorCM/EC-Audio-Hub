@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 
 struct HubView: View {
+    @State private var releaseToDelete: AdminRelease?
     @EnvironmentObject private var uploader: UploadManager
     private let bg = Color(red: 0.055, green: 0.067, blue: 0.09)
     private let panel = Color(red: 0.105, green: 0.125, blue: 0.16)
@@ -33,6 +34,14 @@ struct HubView: View {
         }
         .background(bg).preferredColorScheme(.dark)
         .frame(minWidth: 760, minHeight: 600)
+        .task { if uploader.isAuthenticated { await uploader.refreshReleases() } }
+        .confirmationDialog("Eliminar publicación", isPresented: Binding(get: { releaseToDelete != nil }, set: { if !$0 { releaseToDelete = nil } }), titleVisibility: .visible) {
+            Button("Eliminar definitivamente", role: .destructive) {
+                if let item = releaseToDelete { Task { await uploader.deleteRelease(item) } }
+                releaseToDelete = nil
+            }
+            Button("Cancelar", role: .cancel) { releaseToDelete = nil }
+        } message: { Text("Se eliminará el Release y todos sus archivos. Esta acción no se puede deshacer.") }
         .alert("EC Audio Hub", isPresented: Binding(get: { uploader.errorMessage != nil }, set: { if !$0 { uploader.errorMessage = nil } })) {
             Button("Aceptar", role: .cancel) { uploader.errorMessage = nil }
         } message: { Text(uploader.errorMessage ?? "") }
@@ -90,6 +99,15 @@ struct HubView: View {
                 }.frame(maxWidth: .infinity).frame(height: 155).background(panel)
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.13), style: StrokeStyle(lineWidth: 1, dash: [6, 5]))).cornerRadius(12)
             }.buttonStyle(.plain).disabled(uploader.isUploading)
+            HStack(spacing: 10) {
+                Button { chooseArtwork() } label: {
+                    Label(uploader.selectedArtwork?.lastPathComponent ?? "Añadir imagen ilustrativa", systemImage: "photo")
+                        .font(.system(size: 11, weight: .semibold)).foregroundColor(Color(red: 0.42, green: 0.78, blue: 0.95))
+                }.buttonStyle(.plain)
+                if uploader.selectedArtwork != nil {
+                    Button("Quitar imagen") { uploader.clearArtwork() }.buttonStyle(.plain).foregroundColor(.secondary)
+                }
+            }
             if let file = uploader.selectedFile {
                 HStack {
                     Label(file.lastPathComponent, systemImage: "doc.zipper").lineLimit(1)
@@ -109,12 +127,39 @@ struct HubView: View {
             if !uploader.lastUploaded.isEmpty {
                 Label("Último publicado: \(uploader.lastUploaded)", systemImage: "checkmark.circle.fill").font(.system(size: 10)).foregroundColor(.green)
             }
+            Divider().overlay(Color.white.opacity(0.08))
+            HStack {
+                Text("PUBLICACIONES EN GITHUB").font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(orange)
+                Spacer()
+                Button { Task { await uploader.refreshReleases() } } label: { Image(systemName: "arrow.clockwise") }.buttonStyle(.plain)
+            }
+            ForEach(uploader.releases) { release in
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(release.name ?? release.tagName).font(.system(size: 11, weight: .semibold)).foregroundColor(.white)
+                        Text(release.tagName + " · " + String(release.assets.count) + " archivo(s)").font(.system(size: 9, design: .monospaced)).foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Button(role: .destructive) { releaseToDelete = release } label: {
+                        Image(systemName: "trash").foregroundColor(.red).padding(8).background(Color.red.opacity(0.1)).cornerRadius(7)
+                    }.buttonStyle(.plain)
+                }.padding(9).background(panel).cornerRadius(8)
+            }
             Spacer(minLength: 0)
         }.padding(32).frame(maxWidth: 680).frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func label(_ text: String) -> some View {
         Text(text).font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundColor(.secondary)
+    }
+    private func chooseArtwork() {
+        let panel = NSOpenPanel()
+        panel.title = "Seleccionar imagen del plugin"
+        panel.allowedContentTypes = [.png, .jpeg, .webP]
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        if panel.runModal() == .OK, let url = panel.url { uploader.selectArtwork(url) }
     }
     private func chooseFile() {
         let panel = NSOpenPanel()
