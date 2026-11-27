@@ -21,7 +21,7 @@ Incluye:
 - Sincronización de estados activos, pagos fallidos y cancelaciones.
 - Límite configurable de dispositivos (por defecto, 2 Macs por cuenta).
 - Panel administrativo para consultar clientes, revocar licencias, conceder accesos temporales y liberar dispositivos.
-- Soporte para plugins AU y VST3 a través de la cuenta EC Audio.
+- Control de acceso a la instalación y distribución de plugins AU/VST3 mediante Client Hub.
 
 La prueba gratuita existente continúa siendo una demostración técnica de 60 segundos y no procesa pagos. Los importes comerciales se configuran en Stripe; no se han inventado precios ni se han creado cargos.
 
@@ -29,7 +29,7 @@ La prueba gratuita existente continúa siendo una demostración técnica de 60 s
 
 Sigue docs/COMMERCIAL-LICENSING.md. El backend necesita un servicio HTTPS persistente (el Blueprint de Render utiliza el plan Starter y un disco persistente), una cuenta Stripe y claves privadas configuradas como variables secretas del servidor.
 
-**Estado:** el código está preparado en la rama feature/commercial-licensing-stripe. Todavía no hay un servidor de pagos publicado ni se han conectado claves Stripe. No vendas licencias hasta completar la configuración y pasar las pruebas de webhooks.
+**Estado:** el código está preparado en la rama feature/commercial-licensing-stripe. Todavía no hay un servidor de pagos publicado ni se han conectado claves Stripe. La validación de licencia dentro de cada plugin cuando se carga en Logic Pro todavía requiere integrar el SDK de licencia en el código fuente de cada plugin. No vendas licencias hasta completar la configuración, esa integración y las pruebas de webhooks.
 
 ## Compilar apps macOS
 
