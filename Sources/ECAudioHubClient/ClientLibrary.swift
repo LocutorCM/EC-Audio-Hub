@@ -18,6 +18,7 @@ final class ClientLibrary: ObservableObject {
     @Published var subscriptionStatus = "Sin verificar"
     @Published var subscriptionActive = false
     @Published var trialUsed = false
+    @Published var subscriptionPlan: String?
     @Published var isAccountBusy = false
     @Published var accountMessage = ""
 
@@ -32,6 +33,9 @@ final class ClientLibrary: ObservableObject {
     private let firebaseUIDKey = "ECAudioHubClient.firebaseUID"
     private let firebaseAPIKey = "AIzaSyCXcjmEv0tdynd0gyKDsZAh4mS998lw5tU"
     private let firebaseProjectID = "ec-audio-accounts"
+    // Set to the deployed HTTPS Render origin before the commercial release.
+    private let apiBaseURL = ""
+    private let deviceIDKey = "ECAudioHubClient.deviceID"
 
     private struct FirebaseAuthDTO: Decodable {
         let idToken: String
@@ -488,7 +492,68 @@ final class ClientLibrary: ObservableObject {
         return nested?["message"] as? String ?? payload?["message"] as? String ?? fallback
     }
 
+    private func apiRequest(_ path: String, method: String = "GET", body: Data? = nil) async throws -> (Data, Int) {
+        guard !apiBaseURL.isEmpty, let url = URL(string: apiBaseURL + path) else {
+            throw ClientAccountError.apiNotConfigured
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.timeoutInterval = 25
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer " + (try await validFirebaseIDToken()), forHTTPHeaderField: "Authorization")
+        if let body {
+            request.httpBody = body
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        return (data, http.statusCode)
+    }
+
+    private func registerCurrentDevice() async throws {
+        let deviceID: String
+        if let saved = UserDefaults.standard.string(forKey: deviceIDKey), !saved.isEmpty {
+            deviceID = saved
+        } else {
+            deviceID = UUID().uuidString.lowercased()
+            UserDefaults.standard.set(deviceID, forKey: deviceIDKey)
+        }
+        let name = Host.current().localizedName ?? "Mac"
+        let body = try JSONSerialization.data(withJSONObject: [
+            "deviceId": deviceID,
+            "deviceName": name,
+            "platform": "macOS"
+        ])
+        let (data, status) = try await apiRequest("/api/customer/devices/activate", method: "POST", body: body)
+        guard (200...299).contains(status) else {
+            throw ClientAccountError.server(firestoreError(data, fallback: "No se pudo activar este Mac como dispositivo autorizado (HTTP \(status))."))
+        }
+    }
+
     private func fetchCustomerSubscription() async throws -> CustomerSubscriptionDTO {
+        if !apiBaseURL.isEmpty {
+            let (apiData, apiStatus) = try await apiRequest("/api/customer/subscription")
+            if (200...299).contains(apiStatus),
+               let payload = try JSONSerialization.jsonObject(with: apiData) as? [String: Any],
+               let subscription = payload["subscription"] as? [String: Any] {
+                let state = subscription["status"] as? String ?? "inactive"
+                let plan = subscription["plan"] as? String
+                let active = subscription["active"] as? Bool ?? false
+                if active || (plan != nil && plan != "trial" && state != "inactive") {
+                    if active && plan != "trial" { try await registerCurrentDevice() }
+                    return CustomerSubscriptionDTO(
+                        status: state,
+                        plan: plan,
+                        active: active,
+                        expiresAt: subscription["expiresAt"] as? String,
+                        remainingSeconds: subscription["remainingSeconds"] as? Int,
+                        trialUsed: false
+                    )
+                }
+            } else if apiStatus != 404 && apiStatus != 503 && !(200...299).contains(apiStatus) {
+                throw ClientAccountError.server(firestoreError(apiData, fallback: "No se pudo consultar la licencia comercial (HTTP \(apiStatus))."))
+            }
+        }
         guard let uid = UserDefaults.standard.string(forKey: firebaseUIDKey), !uid.isEmpty else {
             throw ClientAccountError.server("No se encontró el identificador de tu cuenta Firebase. Inicia sesión nuevamente.")
         }
@@ -663,8 +728,10 @@ final class ClientLibrary: ObservableObject {
     private func applySubscription(_ subscription: CustomerSubscriptionDTO) {
         subscriptionActive = subscription.active
         trialUsed = subscription.trialUsed
+        subscriptionPlan = subscription.plan
         let expiry = subscription.remainingSeconds.map { " · \($0) s restantes" } ?? ""
-        subscriptionStatus = subscription.active ? "Acceso activo" + expiry :
+        let planLabel = subscription.plan == "annual" ? "anual" : subscription.plan == "monthly" ? "mensual" : subscription.plan == "trial" ? "de prueba" : ""
+        subscriptionStatus = subscription.active ? (planLabel.isEmpty ? "Acceso activo" : "Suscripción " + planLabel + " activa") + expiry :
             (subscription.status == "expired" ? "Prueba vencida" : "Sin acceso activo")
         UserDefaults.standard.set(subscriptionStatus, forKey: "ECAudioHubClient.subscriptionStatus")
         if subscription.active {
