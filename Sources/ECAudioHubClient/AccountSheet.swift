@@ -2,7 +2,7 @@ import SwiftUI
 
 struct AccountSheet: View {
     @EnvironmentObject private var library: ClientLibrary
-    @Environment(\\.dismiss) private var dismiss
+    @Environment(\.dismiss) private var dismiss
     @State private var email = ""
     @State private var password = ""
     @State private var displayName = ""
