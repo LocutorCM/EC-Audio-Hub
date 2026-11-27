@@ -48,8 +48,8 @@ El endpoint recibe el POST form-encoded de Ko-fi, lee el campo `data` y valida `
 ## 4. Flujo de compra y vinculación
 
 1. El cliente inicia sesión en [Mi cuenta EC Audio](https://locutorcm.github.io/EC-Audio-Hub/account.html).
-2. Pulsa “Unirme a EC Audio en Ko-fi”. El servidor genera un código de vinculación de un solo uso con 24 horas de vigencia.
-3. El cliente copia ese código en el campo de mensaje de su primera membresía/pago en Ko-fi.
+2. Pulsa “Unirme a EC Audio en Ko-fi”. El servidor genera un código de vinculación de un solo uso (cuando usa un correo distinto) con 24 horas de vigencia.
+3. Si paga con el mismo correo de su cuenta EC Audio, la vinculación se realiza por coincidencia de correo. Si usa otro correo, copia el código en el mensaje público de su primera membresía en Ko-fi; un mensaje privado puede no llegar en el webhook.
 4. Ko-fi envía el webhook. Si el token, el nivel, la moneda y el pago son válidos, el servidor vincula el correo de Ko-fi a la cuenta Firebase y activa la licencia.
 5. Los pagos posteriores se relacionan con el correo Ko-fi previamente vinculado y renuevan 32 días.
 6. Client Hub consulta el mismo entitlement y aplica el límite de dos Macs.
