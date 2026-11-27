@@ -281,7 +281,7 @@ final class ClientLibrary: ObservableObject {
             throw ClientInstallError.installedBundleNotFound(url.lastPathComponent)
         }
         try fileManager.removeItem(at: url)
-        for (name, paths) in installedPaths {
+        for (name, paths) in Array(installedPaths) {
             let remaining = paths.filter { $0 != url.path }
             if remaining.isEmpty {
                 installedPaths.removeValue(forKey: name)
