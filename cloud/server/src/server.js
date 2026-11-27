@@ -101,9 +101,9 @@ app.use((req, res, next) => {
   return next();
 });
 
-installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret: JWT_SECRET, firebaseApiKey: FIREBASE_API_KEY, firebaseProjectId: FIREBASE_PROJECT_ID, stripe, stripeWebhookSecret: STRIPE_WEBHOOK_SECRET, stripeMonthlyPriceId: STRIPE_MONTHLY_PRICE_ID, stripeAnnualPriceId: STRIPE_ANNUAL_PRICE_ID, customerWebURL: CUSTOMER_WEB_URL, maxActiveDevices: MAX_ACTIVE_DEVICES, loginLimiter: rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, standardHeaders: 'draft-7', legacyHeaders: false }) });
+installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret: JWT_SECRET, firebaseApiKey: FIREBASE_API_KEY, firebaseProjectId: FIREBASE_PROJECT_ID, customerWebURL: CUSTOMER_WEB_URL, maxActiveDevices: MAX_ACTIVE_DEVICES, loginLimiter: rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, standardHeaders: 'draft-7', legacyHeaders: false }) });
 
-app.get('/health', (_req, res) => res.json({ ok: true, service: 'EC Audio Cloud API', customerAccounts: true, firebaseConfigured: Boolean(FIREBASE_API_KEY && FIREBASE_PROJECT_ID), stripeConfigured: Boolean(stripe && STRIPE_WEBHOOK_SECRET && STRIPE_MONTHLY_PRICE_ID && STRIPE_ANNUAL_PRICE_ID), demoTrialSeconds: 60 }));
+app.get('/health', (_req, res) => res.json({ ok: true, service: 'EC Audio Cloud API', customerAccounts: true, firebaseConfigured: Boolean(FIREBASE_API_KEY && FIREBASE_PROJECT_ID), kofiConfigured: Boolean(KOFI_VERIFICATION_TOKEN && KOFI_MONTHLY_TIER_NAME), kofiPageURL: KOFI_PAGE_URL, demoTrialSeconds: 60 }));
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -147,24 +147,12 @@ function auth(req, res, next) {
    const customers = db.prepare("SELECT c.id,c.email,c.display_name AS displayName,c.created_at AS createdAt,s.status,s.plan,s.started_at AS startedAt,s.expires_at AS expiresAt,s.cancel_at_period_end AS cancelAtPeriodEnd,s.billing_interval AS billingInterval,(SELECT COUNT(*) FROM customer_devices d WHERE d.customer_id=c.id AND d.active=1) AS activeDevices FROM customer_accounts c LEFT JOIN customer_subscriptions s ON s.customer_id=c.id ORDER BY c.created_at DESC LIMIT 250").all();
    return res.json({ totals, customers });
  });
- app.post('/api/admin/licensing/customers/:customerId/revoke', auth, async (req, res) => {
-   const subscription = db.prepare('SELECT stripe_subscription_id FROM customer_subscriptions WHERE customer_id=?').get(req.params.customerId);
-   if (!subscription) return res.status(404).json({ error: 'No se encontró una suscripción para esa cuenta.' });
-   try {
-     if (stripe && subscription.stripe_subscription_id) {
-       await stripe.subscriptions.cancel(subscription.stripe_subscription_id);
-       const now = new Date().toISOString();
-       db.prepare("UPDATE customer_subscriptions SET status='canceled',expires_at=?,cancel_at_period_end=0,updated_at=? WHERE customer_id=?")
-         .run(now, now, req.params.customerId);
-     } else {
-       const now = new Date().toISOString();
-       db.prepare("UPDATE customer_subscriptions SET status='canceled',expires_at=?,cancel_at_period_end=0,updated_at=? WHERE customer_id=?")
-         .run(now, now, req.params.customerId);
-     }
-     return res.json({ revoked: true });
-   } catch {
-     return res.status(502).json({ error: 'No se pudo revocar la suscripción en Stripe.' });
-   }
+ app.post('/api/admin/licensing/customers/:customerId/revoke', auth, (req, res) => {
+   const now = new Date().toISOString();
+   const result = db.prepare("UPDATE customer_subscriptions SET status='canceled',expires_at=?,cancel_at_period_end=0,updated_at=? WHERE customer_id=?")
+     .run(now, now, req.params.customerId);
+   if (!result.changes) return res.status(404).json({ error: 'No se encontró una suscripción para esa cuenta.' });
+   return res.json({ revoked: true });
  });
  app.get('/api/admin/licensing/customers/:customerId/devices', auth, (req, res) => {
    const devices = db.prepare('SELECT device_id AS deviceId,device_name AS deviceName,platform,active,first_seen_at AS firstSeenAt,last_seen_at AS lastSeenAt FROM customer_devices WHERE customer_id=? ORDER BY last_seen_at DESC')
