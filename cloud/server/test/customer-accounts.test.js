@@ -170,6 +170,7 @@ test('Ko-fi membership webhook links a Firebase account and activates a monthly 
     verification_token: 'kofi-test-secret',
     kofi_transaction_id: 'kofi-tx-001',
     message_id: 'kofi-message-001',
+    type: 'Subscription',
     is_subscription_payment: true,
     tier_name: 'EC Audio Monthly',
     currency: 'USD',
