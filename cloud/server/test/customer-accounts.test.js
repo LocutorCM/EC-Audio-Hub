@@ -85,3 +85,35 @@ test('customer registration, login, trial activation, expiry and reactivation', 
   assert.equal(reactivate.status, 200);
   assert.equal((await reactivate.json()).subscription.active, true);
 });
+
+test('Firebase identity exchange creates one shared EC Audio customer session', async (t) => {
+  const db = new Database(':memory:');
+  const app = express();
+  app.use(express.json());
+  installCustomerAccountApi(app, {
+    db, jwt, bcrypt, jwtSecret: 'test-secret-with-at-least-forty-eight-characters',
+    firebaseTokenVerifier: async (token) => {
+      assert.equal(token, 'firebase-id-token');
+      return { uid: 'firebase-user-123', email: 'firebase@example.com', displayName: 'Firebase User', emailVerified: true };
+    },
+    loginLimiter: rateLimit({ windowMs: 60_000, limit: 50, standardHeaders: false, legacyHeaders: false })
+  });
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  t.after(async () => { await new Promise(resolve => server.close(resolve)); db.close(); });
+  const exchange = () => fetch(base + '/api/customer/auth/firebase', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken: 'firebase-id-token' })
+  });
+  const first = await exchange();
+  assert.equal(first.status, 200);
+  const firstSession = await first.json();
+  assert.equal(firstSession.user.email, 'firebase@example.com');
+  assert.ok(firstSession.token);
+  const second = await exchange();
+  assert.equal(second.status, 200);
+  const secondSession = await second.json();
+  assert.equal(secondSession.user.id, firstSession.user.id);
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM customer_accounts').get().count, 1);
+});
