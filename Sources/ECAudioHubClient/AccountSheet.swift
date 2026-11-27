@@ -29,12 +29,12 @@ struct AccountSheet: View {
                         .font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
                     Text(library.subscriptionStatus)
                         .font(.system(size: 12)).foregroundColor(library.subscriptionActive ? .green : Color(hex: 0xA9BBD2))
-                    Button("Activar prueba gratuita · $0 MXN") {
+                    Button(library.trialUsed ? "Prueba gratuita utilizada" : "Activar prueba gratuita · $0 MXN") {
                         Task { await library.activateTrial() }
                     }
                     .buttonStyle(BlueButtonStyle())
-                    .disabled(library.isAccountBusy)
-                    Text("Prueba de 1 minuto, sin tarjeta y sin cobro. Solo para pruebas.")
+                    .disabled(library.isAccountBusy || library.trialUsed || library.subscriptionActive)
+                    Text(library.trialUsed ? "Esta cuenta ya utilizó su prueba gratuita." : "Prueba de 1 minuto, sin tarjeta y sin cobro. Solo para pruebas.")
                         .font(.system(size: 10)).foregroundColor(.secondary)
                     Button("Cerrar sesión") { library.signOutCustomer() }
                         .font(.system(size: 11, weight: .semibold)).foregroundColor(Color(hex: 0xFF9B9B))
@@ -91,15 +91,6 @@ struct AccountSheet: View {
                 .font(.system(size: 10)).foregroundColor(.secondary)
 
             Divider().overlay(Color.white.opacity(0.12))
-            VStack(alignment: .leading, spacing: 7) {
-                Text("DIRECCIÓN DEL SERVIDOR")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .tracking(1.2).foregroundColor(Color(hex: 0x70C9F2))
-                TextField("https://tu-servidor-api.com", text: $library.apiBaseURL)
-                    .textFieldStyle(.roundedBorder)
-                Text("Se configura cuando el servidor EC Audio esté publicado. No introduzcas contraseñas ni tokens aquí.")
-                    .font(.system(size: 10)).foregroundColor(.secondary)
-            }
 
             if !library.accountMessage.isEmpty {
                 Text(library.accountMessage)
