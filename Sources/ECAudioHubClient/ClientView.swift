@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ClientView: View {
     @EnvironmentObject private var library: ClientLibrary
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedSection = "Biblioteca"
     @State private var pluginToUninstall: String?
 
@@ -60,8 +61,15 @@ struct ClientView: View {
         .task {
             await library.refresh()
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 45_000_000_000)
+                // Actualiza el catálogo automáticamente cada 10 segundos.
+                try? await Task.sleep(nanoseconds: 10_000_000_000)
                 if !Task.isCancelled { await library.refresh() }
+            }
+        }
+        .onChange(of: scenePhase) { phase in
+            // Al volver a abrir/activar la ventana, consulta inmediatamente el catálogo.
+            if phase == .active {
+                Task { await library.refresh() }
             }
         }
     }
