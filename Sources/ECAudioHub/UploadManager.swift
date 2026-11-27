@@ -184,6 +184,7 @@ final class UploadManager: ObservableObject {
                 version: \(releaseVersion)
                 file_name: \(fileName)
                 sha256: \(checksum)
+                \(artworkName.map { "image_file: \($0)" } ?? "")
                 """)
             guard let uploadTemplate = release.uploadURL,
                   let uploadURL = URL(string: uploadTemplate.replacingOccurrences(of: "{?name,label}", with: "")) else {
@@ -204,6 +205,9 @@ final class UploadManager: ObservableObject {
             guard let http = response as? HTTPURLResponse, (200...201).contains(http.statusCode) else {
                 let detail = (try? JSONDecoder().decode(GitHubError.self, from: data).message) ?? "HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)"
                 throw UploadError.message("No se pudo subir el asset: \(detail)")
+            }
+            if let artwork = selectedArtwork, let artworkName {
+                try await uploadAsset(artwork, named: artworkName, uploadTemplate: uploadTemplate, token: token)
             }
             lastUploaded = "\(name) v\(releaseVersion)"
             status = "Publicado correctamente en GitHub Releases."
@@ -237,6 +241,28 @@ final class UploadManager: ObservableObject {
             throw UploadError.message("No se pudo crear el release: \(detail). Revisa el permiso Contents: Read and write del token.")
         }
         return try JSONDecoder().decode(GitHubRelease.self, from: data)
+    }
+
+
+    private func uploadAsset(_ file: URL, named name: String, uploadTemplate: String, token: String) async throws {
+        let template = uploadTemplate.replacingOccurrences(of: "{?name,label}", with: "")
+        guard let base = URL(string: template), var components = URLComponents(url: base, resolvingAgainstBaseURL: false) else {
+            throw UploadError.message("URL de imagen inválida.")
+        }
+        components.queryItems = [URLQueryItem(name: "name", value: name)]
+        guard let url = components.url else { throw UploadError.message("URL de imagen inválida.") }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.setValue(UTType(filenameExtension: file.pathExtension)?.preferredMIMEType ?? "application/octet-stream", forHTTPHeaderField: "Content-Type")
+        request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+        request.timeoutInterval = 300
+        let (data, response) = try await session.upload(for: request, fromFile: file)
+        guard let http = response as? HTTPURLResponse, (200...201).contains(http.statusCode) else {
+            let detail = (try? JSONDecoder().decode(GitHubError.self, from: data).message) ?? "Error HTTP"
+            throw UploadError.message("No se pudo subir la imagen: \(detail)")
+        }
     }
 
 
