@@ -25,13 +25,11 @@ const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || '');
 const FIREBASE_API_KEY = String(process.env.FIREBASE_API_KEY || '');
 const FIREBASE_PROJECT_ID = String(process.env.FIREBASE_PROJECT_ID || '');
-const STRIPE_SECRET_KEY = String(process.env.STRIPE_SECRET_KEY || '');
-const STRIPE_WEBHOOK_SECRET = String(process.env.STRIPE_WEBHOOK_SECRET || '');
-const STRIPE_MONTHLY_PRICE_ID = String(process.env.STRIPE_MONTHLY_PRICE_ID || '');
-const STRIPE_ANNUAL_PRICE_ID = String(process.env.STRIPE_ANNUAL_PRICE_ID || '');
+const KOFI_PAGE_URL = String(process.env.KOFI_PAGE_URL || 'https://ko-fi.com/ecaudio');
+const KOFI_VERIFICATION_TOKEN = String(process.env.KOFI_VERIFICATION_TOKEN || '');
+const KOFI_MONTHLY_TIER_NAME = String(process.env.KOFI_MONTHLY_TIER_NAME || '');
 const CUSTOMER_WEB_URL = String(process.env.CUSTOMER_WEB_URL || 'https://locutorcm.github.io/EC-Audio-Hub').replace(/\/$/, '');
 const MAX_ACTIVE_DEVICES = Math.max(1, Number(process.env.MAX_ACTIVE_DEVICES || 2));
-const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 const MAX_UPLOAD = Math.max(1, Number(process.env.MAX_UPLOAD_GB || 2)) * 1024 * 1024 * 1024;
 
 if (!JWT_SECRET || JWT_SECRET.length < 40) throw new Error('JWT_SECRET must contain at least 40 characters.');
@@ -79,9 +77,8 @@ const app = express();
 app.disable('x-powered-by');
 app.use(helmet());
 app.use(compression());
-app.use(express.json({ limit: '32kb', verify: (req, _res, buffer) => {
-  if (req.originalUrl.startsWith('/api/customer/billing/webhook')) req.rawBody = Buffer.from(buffer);
-} }));
+app.use(express.urlencoded({ extended: false, limit: '64kb' }));
+app.use(express.json({ limit: '32kb' }));
 
 const allowedOrigins = new Set(
   String(process.env.CORS_ORIGINS || 'https://locutorcm.github.io')
