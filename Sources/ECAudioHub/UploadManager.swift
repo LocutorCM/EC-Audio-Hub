@@ -43,6 +43,8 @@ final class UploadManager: ObservableObject {
     @Published private(set) var isConnecting = false
     @Published private(set) var isUploading = false
     @Published private(set) var selectedFile: URL?
+    @Published private(set) var selectedArtwork: URL?
+    @Published private(set) var releases: [AdminRelease] = []
     @Published private(set) var status = "Conecta tu cuenta de GitHub para publicar releases."
     @Published private(set) var lastUploaded = ""
     @Published var errorMessage: String?
@@ -60,6 +62,40 @@ final class UploadManager: ObservableObject {
         errorMessage = nil
     }
     func clearFile() { selectedFile = nil }
+    func selectArtwork(_ url: URL) { selectedArtwork = url }
+    func clearArtwork() { selectedArtwork = nil }
+
+    func refreshReleases() async {
+        guard let token else { errorMessage = "Conecta GitHub primero."; return }
+        do {
+            var request = URLRequest(url: URL(string: "\(api)/repos/\(repositoryOwner)/\(repositoryName)/releases?per_page=100")!)
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+            request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                throw UploadError.message("No se pudieron consultar las publicaciones.")
+            }
+            releases = try JSONDecoder().decode([AdminRelease].self, from: data)
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func deleteRelease(_ release: AdminRelease) async {
+        guard let token else { errorMessage = "Conecta GitHub primero."; return }
+        do {
+            var request = URLRequest(url: URL(string: "\(api)/repos/\(repositoryOwner)/\(repositoryName)/releases/\(release.id)")!)
+            request.httpMethod = "DELETE"
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+            request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+            let (_, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 204 else {
+                throw UploadError.message("GitHub no pudo eliminar esta publicación.")
+            }
+            status = "Publicación eliminada."
+            await refreshReleases()
+        } catch { errorMessage = error.localizedDescription }
+    }
 
     func connectGitHub() async {
         let value = githubToken.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -133,6 +169,9 @@ final class UploadManager: ObservableObject {
             defer { if let createdArchive { try? FileManager.default.removeItem(at: createdArchive) } }
 
             let fileName = uploadFile.lastPathComponent
+            let artworkAccess = selectedArtwork?.startAccessingSecurityScopedResource() ?? false
+            defer { if artworkAccess { selectedArtwork?.stopAccessingSecurityScopedResource() } }
+            let artworkName = selectedArtwork?.lastPathComponent
             let checksum = try sha256(of: uploadFile)
             let slug = name.lowercased().replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
             let tag = "\(slug)-v\(releaseVersion)"
@@ -169,6 +208,8 @@ final class UploadManager: ObservableObject {
             lastUploaded = "\(name) v\(releaseVersion)"
             status = "Publicado correctamente en GitHub Releases."
             selectedFile = nil
+            selectedArtwork = nil
+            await refreshReleases()
         } catch {
             errorMessage = error.localizedDescription
             status = "No se pudo completar la publicación."
@@ -198,6 +239,28 @@ final class UploadManager: ObservableObject {
         return try JSONDecoder().decode(GitHubRelease.self, from: data)
     }
 
+
+    private func uploadAsset(_ file: URL, named name: String, uploadTemplate: String, token: String) async throws {
+        let template = uploadTemplate.replacingOccurrences(of: "{?name,label}", with: "")
+        guard let base = URL(string: template), var components = URLComponents(url: base, resolvingAgainstBaseURL: false) else {
+            throw UploadError.message("URL de imagen inválida.")
+        }
+        components.queryItems = [URLQueryItem(name: "name", value: name)]
+        guard let url = components.url else { throw UploadError.message("URL de imagen inválida.") }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.setValue(UTType(filenameExtension: file.pathExtension)?.preferredMIMEType ?? "application/octet-stream", forHTTPHeaderField: "Content-Type")
+        request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+        request.timeoutInterval = 300
+        let (data, response) = try await session.upload(for: request, fromFile: file)
+        guard let http = response as? HTTPURLResponse, (200...201).contains(http.statusCode) else {
+            let detail = (try? JSONDecoder().decode(GitHubError.self, from: data).message) ?? "Error HTTP"
+            throw UploadError.message("No se pudo subir la imagen: \(detail)")
+        }
+    }
+
     private func sha256(of url: URL) throws -> String {
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
@@ -221,3 +284,12 @@ private enum UploadError: LocalizedError {
     case message(String)
     var errorDescription: String? { if case .message(let value) = self { return value }; return nil }
 }
+
+struct AdminRelease: Decodable, Identifiable {
+    let id: Int
+    let tagName: String
+    let name: String?
+    let assets: [AdminReleaseAsset]
+    enum CodingKeys: String, CodingKey { case id, name, assets; case tagName = "tag_name" }
+}
+private struct AdminReleaseAsset: Decodable { let name: String }
