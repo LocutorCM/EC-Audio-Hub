@@ -9,7 +9,7 @@ const jwt = require('jsonwebtoken');
 const Database = require('better-sqlite3');
 const { installCustomerAccountApi } = require('../src/customer-accounts');
 
-test('customer registration, login, trial activation, expiry and reactivation', async (t) => {
+test('customer registration, login, one-time trial activation and expiry', async (t) => {
   const db = new Database(':memory:');
   const app = express();
   app.use(express.json());
@@ -78,12 +78,12 @@ test('customer registration, login, trial activation, expiry and reactivation', 
   assert.equal(expired.subscription.active, false);
   assert.equal(expired.subscription.status, 'expired');
 
-  const reactivate = await fetch(base + '/api/customer/subscription/activate', {
+  const secondActivation = await fetch(base + '/api/customer/subscription/activate', {
     method: 'POST',
     headers
   });
-  assert.equal(reactivate.status, 200);
-  assert.equal((await reactivate.json()).subscription.active, true);
+  assert.equal(secondActivation.status, 409);
+  assert.equal((await secondActivation.json()).error, 'Esta cuenta ya tiene una prueba o licencia registrada.');
 });
 
 test('Firebase identity exchange creates one shared EC Audio customer session', async (t) => {
