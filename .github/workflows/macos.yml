@@ -22,26 +22,51 @@ jobs:
         run: swift build -c release --triple x86_64-apple-macosx12.0
       - name: Build Apple Silicon
         run: swift build -c release --triple arm64-apple-macosx12.0
-      - name: Package app bundle
+
+      - name: Package EC Audio Hub Admin
         run: |
-          mkdir -p "dist/EC Audio Hub.app/Contents/MacOS"
-          cp .build/x86_64-apple-macosx/release/EC-Audio-Hub "dist/EC Audio Hub.app/Contents/MacOS/EC-Audio-Hub"
-          cat > "dist/EC Audio Hub.app/Contents/Info.plist" <<'PLIST'
+          mkdir -p "dist/EC Audio Hub Admin.app/Contents/MacOS"
+          cat > "dist/EC Audio Hub Admin.app/Contents/Info.plist" <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0"><dict>
-          <key>CFBundleName</key><string>EC Audio Hub</string>
-          <key>CFBundleDisplayName</key><string>EC Audio Hub</string>
-          <key>CFBundleIdentifier</key><string>com.ecaudio.hub</string>
+          <key>CFBundleName</key><string>EC Audio Hub Admin</string>
+          <key>CFBundleDisplayName</key><string>EC Audio Hub Admin</string>
+          <key>CFBundleIdentifier</key><string>com.ecaudio.hub.admin</string>
           <key>CFBundleExecutable</key><string>EC-Audio-Hub</string>
           <key>CFBundlePackageType</key><string>APPL</string>
           <key>LSMinimumSystemVersion</key><string>12.0</string>
           </dict></plist>
           PLIST
-          lipo -create .build/x86_64-apple-macosx/release/EC-Audio-Hub .build/arm64-apple-macosx/release/EC-Audio-Hub -output "dist/EC Audio Hub.app/Contents/MacOS/EC-Audio-Hub"
-          codesign --force --deep --sign - "dist/EC Audio Hub.app"
-          ditto -c -k --sequesterRsrc --keepParent "dist/EC Audio Hub.app" EC-Audio-Hub-macOS-Universal.zip
+          lipo -create .build/x86_64-apple-macosx/release/EC-Audio-Hub .build/arm64-apple-macosx/release/EC-Audio-Hub -output "dist/EC Audio Hub Admin.app/Contents/MacOS/EC-Audio-Hub"
+          codesign --force --deep --sign - "dist/EC Audio Hub Admin.app"
+          ditto -c -k --sequesterRsrc --keepParent "dist/EC Audio Hub Admin.app" EC-Audio-Hub-Admin-macOS-Universal.zip
+
+      - name: Package EC Audio Hub Client
+        run: |
+          mkdir -p "dist/EC Audio Hub Client.app/Contents/MacOS"
+          cat > "dist/EC Audio Hub Client.app/Contents/Info.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+          <key>CFBundleName</key><string>EC Audio Hub Client</string>
+          <key>CFBundleDisplayName</key><string>EC Audio Hub Client</string>
+          <key>CFBundleIdentifier</key><string>com.ecaudio.hub.client</string>
+          <key>CFBundleExecutable</key><string>EC-Audio-Hub-Client</string>
+          <key>CFBundlePackageType</key><string>APPL</string>
+          <key>LSMinimumSystemVersion</key><string>12.0</string>
+          </dict></plist>
+          PLIST
+          lipo -create .build/x86_64-apple-macosx/release/EC-Audio-Hub-Client .build/arm64-apple-macosx/release/EC-Audio-Hub-Client -output "dist/EC Audio Hub Client.app/Contents/MacOS/EC-Audio-Hub-Client"
+          codesign --force --deep --sign - "dist/EC Audio Hub Client.app"
+          ditto -c -k --sequesterRsrc --keepParent "dist/EC Audio Hub Client.app" EC-Audio-Hub-Client-macOS-Universal.zip
+
       - uses: actions/upload-artifact@v4
         with:
           name: EC-Audio-Hub-macOS-Universal
-          path: EC-Audio-Hub-macOS-Universal.zip
+          path: EC-Audio-Hub-Admin-macOS-Universal.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EC-Audio-Hub-Client-macOS-Universal
+          path: EC-Audio-Hub-Client-macOS-Universal.zip
