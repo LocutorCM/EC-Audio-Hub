@@ -2,3 +2,9 @@
 .DS_Store
 *.xcodeproj/
 *.xcworkspace/
+
+# Self-hosted cloud secrets and runtime data
+cloud/server/.env
+cloud/server/data/
+cloud/server/node_modules/
+cloud/server/*.sqlite*
