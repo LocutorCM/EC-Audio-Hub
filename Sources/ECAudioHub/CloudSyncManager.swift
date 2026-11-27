@@ -20,9 +20,10 @@ struct CloudPlugin: Identifiable, Codable, Hashable {
     var createdAt: String
     var updatedAt: String
     var cachedPath: String?
+    var cachedVersion: String?
 
     var isCached: Bool {
-        guard let cachedPath else { return false }
+        guard let cachedPath, cachedVersion == version else { return false }
         return FileManager.default.fileExists(atPath: cachedPath)
     }
 
@@ -156,12 +157,15 @@ final class CloudSyncManager: ObservableObject {
             if http.statusCode == 401 { logout(); throw CloudError.message("Tu sesión expiró. Inicia sesión otra vez.") }
             guard (200...299).contains(http.statusCode) else { throw CloudError.message("El servidor respondió \(http.statusCode).") }
             let decoded = try decoder.decode(CatalogResponse.self, from: data)
-            let oldPaths = Dictionary(uniqueKeysWithValues: plugins.compactMap { plugin in
-                plugin.cachedPath.map { (plugin.id, $0) }
+            let oldCache = Dictionary(uniqueKeysWithValues: plugins.compactMap { plugin in
+                plugin.cachedPath.map { (plugin.id, ($0, plugin.cachedVersion)) }
             })
             plugins = decoded.plugins.map { item in
                 var copy = item
-                copy.cachedPath = oldPaths[item.id]
+                if let cached = oldCache[item.id], cached.1 == item.version {
+                    copy.cachedPath = cached.0
+                    copy.cachedVersion = cached.1
+                }
                 return copy
             }
             isOnline = true
@@ -197,6 +201,7 @@ final class CloudSyncManager: ObservableObject {
         try FileManager.default.moveItem(at: temporary, to: destination)
         if let index = plugins.firstIndex(where: { $0.id == plugin.id }) {
             plugins[index].cachedPath = destination.path
+            plugins[index].cachedVersion = plugin.version
             saveOfflineCatalog()
         }
         return destination
