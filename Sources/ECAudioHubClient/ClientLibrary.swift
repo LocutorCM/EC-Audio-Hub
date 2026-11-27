@@ -232,6 +232,37 @@ final class ClientLibrary: ObservableObject {
         return installedBundles
     }
 
+    func uninstallPlugin(named name: String) throws {
+        let fileManager = FileManager.default
+        let root = fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Audio/Plug-Ins", isDirectory: true).standardizedFileURL
+        var paths = installedPaths[name] ?? []
+        // Older Client versions did not store exact bundle paths; try matching bundle names.
+        if paths.isEmpty {
+            for folderName in ["VST3", "Components"] {
+                let folder = root.appendingPathComponent(folderName, isDirectory: true)
+                let contents = (try? fileManager.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
+                paths += contents.filter { url in
+                    let candidate = url.deletingPathExtension().lastPathComponent
+                    return candidate.localizedCaseInsensitiveContains(name) || name.localizedCaseInsensitiveContains(candidate)
+                }.map(\.path)
+            }
+        }
+        guard !paths.isEmpty else { throw ClientInstallError.installedBundleNotFound(name) }
+        for rawPath in paths {
+            let url = URL(fileURLWithPath: rawPath).standardizedFileURL
+            let parent = url.deletingLastPathComponent()
+            let allowed = parent == root.appendingPathComponent("VST3") || parent == root.appendingPathComponent("Components")
+            let ext = url.pathExtension.lowercased()
+            guard allowed, (ext == "vst3" || ext == "component") else { continue }
+            if fileManager.fileExists(atPath: url.path) { try fileManager.removeItem(at: url) }
+        }
+        installedPaths.removeValue(forKey: name)
+        installedVersions.removeValue(forKey: name)
+        UserDefaults.standard.set(installedPaths, forKey: installedPathsKey)
+        UserDefaults.standard.set(installedVersions, forKey: installedKey)
+        status = "\(name) se desinstaló correctamente."
+    }
+
     private func saveForManualInstall(_ source: URL, fileName: String) throws -> URL {
         let folder = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("EC Audio Hub", isDirectory: true)
@@ -248,12 +279,14 @@ enum ClientInstallError: LocalizedError {
     case checksumMismatch
     case archiveExtractionFailed
     case noPluginBundle
+    case installedBundleNotFound(String)
 
     var errorDescription: String? {
         switch self {
         case .checksumMismatch: return "La verificación SHA-256 no coincide. El archivo se rechazó por seguridad."
         case .archiveExtractionFailed: return "No se pudo extraer el ZIP."
         case .noPluginBundle: return "El ZIP no contiene un paquete AU (.component) o VST3 (.vst3)."
+        case .installedBundleNotFound(let name): return "No encontré los archivos instalados de \\(name). Comprueba el nombre del bundle del plugin."
         }
     }
 }
