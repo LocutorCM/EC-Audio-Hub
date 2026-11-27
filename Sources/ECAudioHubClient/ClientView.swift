@@ -189,9 +189,20 @@ struct ClientView: View {
         return HStack(spacing: 15) {
             ZStack {
                 RoundedRectangle(cornerRadius: 12).fill(LinearGradient(colors: [Color(hex: 0x285E9C), Color(hex: 0x193453)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                Image(systemName: "waveform.path").font(.system(size: 22, weight: .medium)).foregroundColor(Color(hex: 0xB7E5FF))
+                if let imageURL = plugin.imageURL {
+                    AsyncImage(url: imageURL) { phase in
+                        if let image = phase.image {
+                            image.resizable().scaledToFill()
+                        } else {
+                            Image(systemName: "waveform.path").font(.system(size: 22, weight: .medium)).foregroundColor(Color(hex: 0xB7E5FF))
+                        }
+                    }
+                } else {
+                    Image(systemName: "waveform.path").font(.system(size: 22, weight: .medium)).foregroundColor(Color(hex: 0xB7E5FF))
+                }
             }
             .frame(width: 54, height: 54)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 8) {
                     Text(plugin.name).font(.system(size: 14, weight: .bold)).foregroundColor(.white)
