@@ -78,7 +78,8 @@ final class ClientLibrary: ObservableObject {
                     sha256: checksum.lowercased(),
                     downloadURL: asset.browserDownloadURL,
                     size: asset.size,
-                    releaseNotes: release.body ?? ""
+                    releaseNotes: release.body ?? "",
+                    imageURL: metadata["image_file"].flatMap { imageName in release.assets.first(where: { $0.name == imageName })?.browserDownloadURL }
                 ))
             }
 
