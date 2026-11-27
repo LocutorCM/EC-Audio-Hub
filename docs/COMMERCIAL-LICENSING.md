@@ -70,6 +70,8 @@ Antes de publicar la siguiente versión macOS:
 3. Inicia sesión con Firebase. Si hay una suscripción comercial activa, el cliente consulta el servidor y registra el Mac.
 4. El límite inicial es de dos dispositivos por cuenta. El usuario puede liberar dispositivos desde la página de cuenta.
 
+Nota: este paso controla la cuenta y la instalación desde Client Hub. Para impedir que una copia ya instalada del AU/VST3 funcione en otro equipo, cada plugin debe integrar el SDK de validación de licencias y consultar el servidor al iniciar.
+
 ## 6. Pruebas obligatorias antes de cobrar en producción
 
 - Ejecutar Checkout con claves y precios de prueba de Stripe.
