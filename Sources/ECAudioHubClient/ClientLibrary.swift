@@ -550,6 +550,7 @@ final class ClientLibrary: ObservableObject {
             let destination = folder.appendingPathComponent(original.lastPathComponent, isDirectory: true)
             try manager.moveItem(at: original, to: destination)
             suspended[original.path] = destination.path
+            UserDefaults.standard.set(suspended, forKey: suspendedPluginsKey)
         }
         UserDefaults.standard.set(suspended, forKey: suspendedPluginsKey)
         status = "Licencia vencida: plugins EC Audio suspendidos sin eliminarlos."
@@ -574,6 +575,7 @@ final class ClientLibrary: ObservableObject {
             try manager.moveItem(at: source, to: original)
             try? manager.removeItem(at: source.deletingLastPathComponent())
             suspended.removeValue(forKey: originalPath)
+            UserDefaults.standard.set(suspended, forKey: suspendedPluginsKey)
         }
         UserDefaults.standard.set(suspended, forKey: suspendedPluginsKey)
         status = "Licencia activa: plugins EC Audio restaurados."
