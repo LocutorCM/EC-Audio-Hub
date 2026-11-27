@@ -99,7 +99,7 @@ app.post('/api/auth/login', loginLimiter, (req, res) => {
 app.get('/api/auth/me', auth, (req, res) => res.json({ user: req.user }));
 app.get('/api/catalog', auth, (_req, res) => {
   const plugins = db.prepare(`SELECT ${publicFields} FROM plugins WHERE published=1 ORDER BY category,name`).all();
-  res.json({ plugins });
+  res.json({ plugins: plugins.map(plugin => ({ ...plugin, published: Boolean(plugin.published) })) });
 });
 app.get('/api/admin/users', auth, adminOnly, (_req, res) => {
   const users = db.prepare("SELECT id,email,role,active,created_at AS createdAt FROM users ORDER BY created_at DESC").all();
@@ -125,7 +125,7 @@ app.patch('/api/admin/users/:id', auth, adminOnly, (req, res) => {
 });
 \napp.get('/api/admin/plugins', auth, adminOnly, (_req, res) => {
   const plugins = db.prepare(`SELECT ${publicFields} FROM plugins ORDER BY updated_at DESC`).all();
-  res.json({ plugins });
+  res.json({ plugins: plugins.map(plugin => ({ ...plugin, published: Boolean(plugin.published) })) });
 });
 
 const upload = multer({
