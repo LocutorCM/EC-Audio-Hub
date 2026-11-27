@@ -68,26 +68,33 @@ final class UploadManager: ObservableObject {
     func refreshReleases() async {
         guard let token else { errorMessage = "Conecta GitHub primero."; return }
         do {
-            var request = URLRequest(url: URL(string: "\(api)/repos/\(repositoryOwner)/\(repositoryName)/releases?per_page=100")!)
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-            request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
-            let (data, response) = try await session.data(for: request)
-            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                throw UploadError.message("No se pudieron consultar las publicaciones.")
+            var allReleases: [AdminRelease] = []
+            var page = 1
+            while true {
+                var request = URLRequest(url: URL(string: "\(api)/repos/\(repositoryOwner)/\(repositoryName)/releases?per_page=100&page=\(page)")!)
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+                request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+                let (data, response) = try await session.data(for: request)
+                guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                    throw UploadError.message("No se pudieron consultar las publicaciones (página \(page)).")
+                }
+                let batch = try JSONDecoder().decode([AdminRelease].self, from: data)
+                allReleases.append(contentsOf: batch)
+                if batch.count < 100 { break }
+                page += 1
             }
-            releases = try JSONDecoder().decode([AdminRelease].self, from: data)
+            releases = allReleases
         } catch { errorMessage = error.localizedDescription }
     }
 
     func deleteRelease(_ release: AdminRelease) async {
         guard let token else { errorMessage = "Conecta GitHub primero."; return }
         do {
-            let pluginTitle = (release.name ?? release.tagName).components(separatedBy: " · v").first ?? release.tagName
-            let targets = releases.filter { (($0.name ?? $0.tagName).components(separatedBy: " · v").first ?? $0.tagName) == pluginTitle }
-            // Retirar la familia de versiones de la interfaz inmediatamente.
-            let targetIDs = Set(targets.map(\.id))
-            releases.removeAll { targetIDs.contains($0.id) }
+            let pluginTitle = release.name ?? release.tagName
+            // Cada publicación tiene identidad propia, incluso si repite nombre y versión.
+            releases.removeAll { $0.id == release.id }
+            let targets = [release]
             for target in targets {
                 let releaseURL = URL(string: api + "/repos/" + repositoryOwner + "/" + repositoryName + "/releases/" + String(target.id))!
                 var request = URLRequest(url: releaseURL)
@@ -113,7 +120,7 @@ final class UploadManager: ObservableObject {
                     _ = try? await session.data(for: tagRequest)
                 }
             }
-            status = pluginTitle + " y todas sus versiones fueron eliminadas."
+            status = pluginTitle + " fue eliminado de GitHub y del catálogo."
             await refreshReleases()
         } catch {
             errorMessage = error.localizedDescription
@@ -198,7 +205,8 @@ final class UploadManager: ObservableObject {
             let artworkName = selectedArtwork?.lastPathComponent
             let checksum = try sha256(of: uploadFile)
             let slug = name.lowercased().replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
-            let tag = "\(slug)-v\(releaseVersion)"
+            let uniqueSuffix = UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "")
+            let tag = "\(slug)-v\(releaseVersion)-\(uniqueSuffix)"
             status = "Creando release en GitHub…"
             let release = try await createRelease(owner: owner, repo: repo, token: token,
                 tag: tag, title: "\(name) · v\(releaseVersion)",
@@ -269,7 +277,7 @@ final class UploadManager: ObservableObject {
             let detail = issueDetails.isEmpty ? apiMessage : apiMessage + " — " + issueDetails
 
             if statusCode == 422 && (apiError?.errors ?? []).contains(where: { $0.code == "already_exists" }) {
-                throw UploadError.message("Ya existe la versión \(tag). Cambia el número de versión y vuelve a publicar.")
+                throw UploadError.message("GitHub ya tiene la etiqueta \(tag). Intenta publicar nuevamente; se genera una etiqueta única automáticamente.")
             }
             if statusCode == 403 || statusCode == 404 {
                 throw UploadError.message("GitHub rechazó la creación del release (HTTP \(statusCode)): \(detail). Comprueba que el token tenga acceso al repositorio y permiso Contents: Read and write.")
