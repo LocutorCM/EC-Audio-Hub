@@ -17,6 +17,7 @@ final class ClientLibrary: ObservableObject {
     private let owner = "LocutorCM"
     private let repository = "EC-Audio-Hub"
     private let installedKey = "ECAudioHubClient.installedVersions"
+    private let installedPathsKey = "ECAudioHubClient.installedPaths"
 
     init() {
         installedVersions = UserDefaults.standard.dictionary(forKey: installedKey) as? [String: String] ?? [:]
