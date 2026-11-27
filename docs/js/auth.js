@@ -11,6 +11,7 @@ import {
   updateProfile
 } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
+import { API_BASE_URL } from "./api-config.js";
 import { getFirestore, doc, getDoc, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 
 const app = initializeApp(firebaseConfig);
@@ -62,6 +63,26 @@ function showSignedOut() {
   authPanel.classList.remove("hidden");
 }
 async function readSubscription(user) {
+  if (API_BASE_URL) {
+    try {
+      const response = await fetch(API_BASE_URL + "/api/customer/subscription", {
+        headers: { Authorization: "Bearer " + await user.getIdToken() }
+      });
+      if (response.ok) {
+        const payload = await response.json();
+        const subscription = payload.subscription || {};
+        if (subscription.active || (subscription.plan && subscription.plan !== "trial" && subscription.status !== "inactive")) {
+          return {
+            ...subscription,
+            expiresAt: subscription.expiresAt ? new Date(subscription.expiresAt) : null,
+            remainingSeconds: subscription.active && subscription.expiresAt
+              ? Math.max(0, Math.ceil((new Date(subscription.expiresAt).getTime() - Date.now()) / 1000)) : 0,
+            trialUsed: false
+          };
+        }
+      }
+    } catch {}
+  }
   const reference = doc(firestore, "ecAudioSubscriptions", user.uid);
   const snapshot = await getDoc(reference);
   if (!snapshot.exists()) {
@@ -85,30 +106,165 @@ function renderSubscription(subscription) {
   const status = $("subscriptionStatus");
   const details = $("subscriptionDetails");
   const trialButton = $("trialBtn");
-  if (subscription.active) {
+  const billingActions = $("billingActions");
+  const portalButton = $("portalBtn");
+  if (subscription.active && subscription.plan && subscription.plan !== "trial") {
+    const planName = subscription.plan === "annual" ? "Anual" : subscription.plan === "monthly" ? "Mensual" : "Comercial";
+    status.textContent = "Suscripción " + planName + " activa";
+    details.textContent = subscription.cancelAtPeriodEnd
+      ? "Tu suscripción está programada para cancelarse al terminar el periodo actual."
+      : "Tu licencia comercial está activa y sincronizada con EC Audio Client.";
+    trialButton.hidden = true;
+    billingActions.hidden = false;
+    portalButton.hidden = false;
+  } else if (subscription.active) {
     status.textContent = "Prueba activa · " + subscription.remainingSeconds + " segundos restantes";
-    details.textContent = "Tu acceso está guardado en Firebase y se comparte con EC Audio Client.";
+    details.textContent = "Tu acceso de prueba está guardado y se comparte con EC Audio Client.";
+    trialButton.hidden = false;
+    billingActions.hidden = false;
+    portalButton.hidden = true;
   } else if (subscription.trialUsed) {
     status.textContent = "Prueba gratuita utilizada";
-    details.textContent = "Esta cuenta ya utilizó su prueba de 60 segundos.";
+    details.textContent = "Esta cuenta ya utilizó su prueba de 60 segundos. Puedes elegir un plan comercial.";
+    trialButton.disabled = true;
+    trialButton.textContent = "Prueba gratuita utilizada";
+    trialButton.hidden = false;
+    billingActions.hidden = false;
+    portalButton.hidden = true;
   } else {
     status.textContent = "Cuenta Firebase conectada · sin licencia activa";
-    details.textContent = "Puedes activar una prueba gratuita de 60 segundos. No se realizará ningún cobro.";
+    details.textContent = "Puedes activar la prueba técnica o elegir una suscripción comercial.";
+    trialButton.disabled = false;
+    trialButton.textContent = "Activar prueba gratuita · $0 MXN";
+    trialButton.hidden = false;
+    billingActions.hidden = false;
+    portalButton.hidden = true;
   }
   trialButton.disabled = subscription.trialUsed || subscription.active;
-  trialButton.textContent = subscription.trialUsed ? "Prueba gratuita utilizada" : "Activar prueba gratuita · $0 MXN";
 }
 
 async function syncCustomerSession(user) {
   try {
     const subscription = await readSubscription(user);
     renderSubscription(subscription);
+    await loadBillingPlans(user);
+    await loadCustomerDevices(user);
   } catch (error) {
     $("subscriptionStatus").textContent = "No se pudo consultar la licencia";
-    $("subscriptionDetails").textContent = error.message || "Activa Cloud Firestore en el proyecto Firebase y publica las reglas de seguridad de EC Audio.";
+    $("subscriptionDetails").textContent = error.message || "No se pudo consultar el estado de tu cuenta.";
     $("trialBtn").disabled = true;
   }
 }
+
+function money(amount, currency) {
+  return new Intl.NumberFormat("es-MX", { style: "currency", currency: currency || "MXN" }).format((amount || 0) / 100);
+}
+
+async function loadBillingPlans(user) {
+  const container = $("billingActions");
+  if (!API_BASE_URL) {
+    container.hidden = false;
+    $("billingNotice").textContent = "Las suscripciones comerciales estarán disponibles cuando se publique el servidor seguro de EC Audio.";
+    $("monthlyBtn").disabled = true;
+    $("annualBtn").disabled = true;
+    return;
+  }
+  try {
+    const response = await fetch(API_BASE_URL + "/api/customer/billing/plans");
+    if (!response.ok) throw new Error("No se pudieron cargar los planes.");
+    const payload = await response.json();
+    const monthly = payload.plans.find(plan => plan.plan === "monthly");
+    const annual = payload.plans.find(plan => plan.plan === "annual");
+    if (monthly) $("monthlyBtn").textContent = "Plan mensual · " + money(monthly.amount, monthly.currency) + " / mes";
+    if (annual) $("annualBtn").textContent = "Plan anual · " + money(annual.amount, annual.currency) + " / año";
+    $("monthlyBtn").disabled = !monthly;
+    $("annualBtn").disabled = !annual;
+    $("billingNotice").textContent = "Pago seguro mediante Stripe. Puedes administrar o cancelar tu suscripción desde tu cuenta.";
+  } catch (error) {
+    $("billingNotice").textContent = error.message || "La facturación todavía no está disponible.";
+    $("monthlyBtn").disabled = true;
+    $("annualBtn").disabled = true;
+  }
+}
+
+async function startCheckout(plan) {
+  const user = auth.currentUser;
+  if (!user || !API_BASE_URL) return;
+  const button = $(plan === "monthly" ? "monthlyBtn" : "annualBtn");
+  button.disabled = true;
+  try {
+    const response = await fetch(API_BASE_URL + "/api/customer/billing/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + await user.getIdToken() },
+      body: JSON.stringify({ plan })
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.url) throw new Error(payload.error || "No se pudo iniciar el pago.");
+    window.location.assign(payload.url);
+  } catch (error) {
+    say(error.message || "No se pudo abrir el pago.", "error");
+    button.disabled = false;
+  }
+}
+
+async function openBillingPortal() {
+  const user = auth.currentUser;
+  if (!user || !API_BASE_URL) return;
+  try {
+    const response = await fetch(API_BASE_URL + "/api/customer/billing/portal", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + await user.getIdToken() }
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.url) throw new Error(payload.error || "No se pudo abrir la administración de pagos.");
+    window.location.assign(payload.url);
+  } catch (error) {
+    say(error.message || "No se pudo abrir la administración de pagos.", "error");
+  }
+}
+
+async function loadCustomerDevices(user) {
+  const list = $("devicesList");
+  list.replaceChildren();
+  if (!API_BASE_URL) {
+    $("devicesSection").hidden = true;
+    return;
+  }
+  try {
+    const response = await fetch(API_BASE_URL + "/api/customer/devices", {
+      headers: { Authorization: "Bearer " + await user.getIdToken() }
+    });
+    if (!response.ok) return;
+    const payload = await response.json();
+    $("devicesSection").hidden = false;
+    $("devicesSummary").textContent = (payload.devices || []).length + " de " + payload.maxDevices + " dispositivos vinculados";
+    for (const device of payload.devices || []) {
+      const item = document.createElement("div");
+      item.className = "device-item";
+      const label = document.createElement("span");
+      label.textContent = device.deviceName + " · " + device.platform;
+      const release = document.createElement("button");
+      release.type = "button";
+      release.textContent = "Liberar";
+      release.addEventListener("click", async () => {
+        const result = await fetch(API_BASE_URL + "/api/customer/devices/" + encodeURIComponent(device.deviceId), {
+          method: "DELETE", headers: { Authorization: "Bearer " + await user.getIdToken() }
+        });
+        if (result.ok) await loadCustomerDevices(user);
+      });
+      item.append(label, release);
+      list.append(item);
+    }
+  } catch {}
+}
+
+$("monthlyBtn")?.addEventListener("click", () => startCheckout("monthly"));
+$("annualBtn")?.addEventListener("click", () => startCheckout("annual"));
+$("portalBtn")?.addEventListener("click", openBillingPortal);
+
+const checkoutResult = new URLSearchParams(window.location.search).get("checkout");
+if (checkoutResult === "success") say("Pago recibido. Estamos confirmando tu suscripción; actualiza el estado en unos segundos.", "ok");
+if (checkoutResult === "cancelled") say("El proceso de pago se canceló. No se realizó ningún cobro.");
 
 async function refreshSubscription() {
   const user = auth.currentUser;
