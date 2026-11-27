@@ -7,6 +7,7 @@ import AppKit
 final class ClientLibrary: ObservableObject {
     @Published private(set) var plugins: [HubPlugin] = []
     @Published private(set) var installedVersions: [String: String] = [:]
+    @Published private(set) var installedPaths: [String: [String]] = [:]
     @Published var searchText = ""
     @Published var isRefreshing = false
     @Published var downloadingIDs: Set<String> = []
@@ -19,6 +20,7 @@ final class ClientLibrary: ObservableObject {
 
     init() {
         installedVersions = UserDefaults.standard.dictionary(forKey: installedKey) as? [String: String] ?? [:]
+        installedPaths = UserDefaults.standard.dictionary(forKey: installedPathsKey) as? [String: [String]] ?? [:]
     }
 
     var filteredPlugins: [HubPlugin] {
