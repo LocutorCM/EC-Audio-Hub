@@ -11,7 +11,7 @@ const api = async (url, options={}) => {
   return data;
 };
 function toast(message){const el=$('#toast');el.textContent=message;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3000)}
-function showDashboard(){ $('#login').hidden=true;$('#dashboard').hidden=false;loadPlugins();connectLive(); }
+function showDashboard(){ $('#login').hidden=true;$('#dashboard').hidden=false;loadPlugins();loadUsers();connectLive(); }
 function showLogin(){ $('#dashboard').hidden=true;$('#login').hidden=false; }
 $('#loginForm').addEventListener('submit',async e=>{
  e.preventDefault();$('#loginError').textContent='';
@@ -42,3 +42,19 @@ function connectLive(){if(!token)return;const scheme=location.protocol==='https:
 function escapeHTML(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function formatBytes(n){return n<1048576?Math.round(n/1024)+' KB':(n/1048576).toFixed(1)+' MB'}
 if(token){api('/api/auth/me').then(showDashboard).catch(()=>{token='';localStorage.removeItem('ec_audio_admin_token');showLogin()})}else showLogin();
+
+$('#customerForm').addEventListener('submit',async e=>{
+ e.preventDefault();const form=e.currentTarget;const button=form.querySelector('button');button.disabled=true;$('#customerStatus').textContent='Creando cuenta...';
+ try{const values=new FormData(form);await api('/api/admin/users',{method:'POST',body:JSON.stringify({email:values.get('email'),password:values.get('password')})});form.reset();$('#customerStatus').textContent='Cuenta creada. Entrega al cliente su correo y contraseña de forma segura.';toast('Cuenta de cliente creada.');await loadUsers();}
+ catch(err){$('#customerStatus').textContent=err.message;}
+ finally{button.disabled=false;}
+});
+async function loadUsers(){
+ try{const data=await api('/api/admin/users');const users=data.users||[];$('#usersList').innerHTML=users.filter(u=>u.role==='customer').map(u=>`<article class="release"><div class="info"><b>${escapeHTML(u.email)}</b><small>${u.active?'Cuenta activa':'Cuenta suspendida'}</small></div><span class="tag ${u.active?'':'draft'}">${u.active?'ACTIVE':'DISABLED'}</span><button data-user="${u.id}" data-active="${u.active}">${u.active?'Suspender':'Reactivar'}</button></article>`).join('')||'<div class="empty">Aún no hay cuentas de clientes.</div>';}
+ catch(err){$('#customerStatus').textContent=err.message;}
+}
+$('#usersList').addEventListener('click',async e=>{
+ const button=e.target.closest('[data-user]');if(!button)return;
+ try{await api('/api/admin/users/'+encodeURIComponent(button.dataset.user),{method:'PATCH',body:JSON.stringify({active:button.dataset.active!=='true'})});await loadUsers();toast('Permisos de cuenta actualizados.');}
+ catch(err){toast(err.message)}
+});
