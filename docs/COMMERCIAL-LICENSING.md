@@ -1,93 +1,78 @@
-# Sistema comercial de licencias EC Audio
+# Sistema comercial de licencias EC Audio con Ko-fi
 
 ## Arquitectura
 
 - Firebase Authentication conserva la identidad de cada cliente.
-- EC Audio Cloud API valida el ID token de Firebase y mantiene las suscripciones comerciales en SQLite sobre un disco persistente.
-- Stripe Checkout procesa el pago y las renovaciones.
-- Stripe Webhooks firmados son la única fuente autorizada para activar, renovar, marcar como impaga o cancelar una suscripción.
+- EC Audio Cloud API valida el ID token de Firebase y mantiene las licencias en SQLite sobre un disco persistente.
+- Ko-fi procesa las membresías mensuales y envía cada pago al webhook de EC Audio.
+- El webhook valida el `verification_token`, el nombre exacto del nivel, la moneda y opcionalmente el importe.
+- La primera compra se vincula a una cuenta mediante un código de un solo uso generado desde Mi cuenta.
+- Cada pago confirmado extiende la licencia por 32 días. Si no llega el siguiente pago, la licencia vence automáticamente.
 - Client Hub consulta el estado al servidor y registra cada Mac autorizado.
-- Firestore conserva el registro de la prueba técnica actual de 60 segundos. El API lee licencias comerciales primero y el cliente recurre a Firestore para la prueba existente.
+- Firestore conserva la prueba técnica de 60 segundos, separada de la licencia comercial.
 
-## 1. Crear los precios en Stripe
+## 1. Configurar la membresía de Ko-fi
 
-En Stripe Dashboard, inicialmente en modo de prueba:
+1. Abre [Ko-fi EC Audio](https://ko-fi.com/ecaudio).
+2. Configura un nivel de membresía mensual para EC Audio.
+3. Anota el nombre exacto del nivel (incluyendo mayúsculas, espacios y símbolos).
+4. Decide el importe y moneda de la membresía. El servidor está preparado para validar MXN y, si configuras `KOFI_MONTHLY_AMOUNT`, también el importe exacto.
+5. En Ko-fi abre Settings > Payments > Webhooks y configura la URL del webhook cuando Render esté publicado.
 
-1. Crea un producto llamado EC Audio Monthly.
-2. Agrega un precio recurrente mensual en MXN.
-3. Crea otro producto o precio para EC Audio Annual, recurrente anual en MXN.
-4. Copia los dos identificadores que comienzan con price_.
-5. Activa y configura el Customer Portal en Billing para que el cliente pueda actualizar su método de pago y cancelar su suscripción.
-
-Los importes no están fijados en el código: utiliza los precios que decidas para EC Audio.
+Ko-fi no proporciona al webhook eventos de cancelación o fin de membresía. Por eso EC Audio no intenta consultar una cancelación: cada pago renueva 32 días y la licencia caduca si no llega el siguiente pago. Ko-fi documenta el webhook y sus limitaciones en [su centro de ayuda](https://help.ko-fi.com/hc/en-us/articles/360004162298-Does-Ko-fi-have-an-API-or-webhook).
 
 ## 2. Publicar EC Audio Cloud API
 
-1. Entra a Render y conecta el repositorio LocutorCM/EC-Audio-Hub.
-2. Crea un Blueprint desde el archivo render.yaml de la rama main.
-3. El servicio se llama ec-audio-cloud. El Blueprint usa el plan Starter y un disco persistente de 1 GB; Render puede cobrar por ambos.
-4. Configura las variables privadas que Render solicite:
-   - ADMIN_EMAIL: correo de administración.
-   - ADMIN_PASSWORD: contraseña larga y única (mínimo 14 caracteres).
-   - FIREBASE_API_KEY: apiKey del archivo docs/js/firebase-config.js.
-   - STRIPE_SECRET_KEY: clave secreta de Stripe (sk_test_... al probar).
-   - STRIPE_MONTHLY_PRICE_ID: ID del precio mensual.
-   - STRIPE_ANNUAL_PRICE_ID: ID del precio anual.
-   - STRIPE_WEBHOOK_SECRET: se configura después de crear el webhook.
-5. Mantén FIREBASE_PROJECT_ID=ec-audio-accounts, CUSTOMER_WEB_URL y MAX_ACTIVE_DEVICES=2.
-6. Cuando termine, abre https://TU-SERVICIO.onrender.com/health. Debe responder ok: true, firebaseConfigured: true y, una vez agregadas las claves y precios, stripeConfigured: true.
+1. Entra a Render y conecta el repositorio `LocutorCM/EC-Audio-Hub`.
+2. Crea el Blueprint desde `render.yaml` en la rama `main` después de integrar esta actualización.
+3. El servicio usa el plan Starter y un disco persistente de 1 GB; Render puede cobrar por ambos.
+4. Configura las variables privadas:
+   - `ADMIN_EMAIL`: correo de administración.
+   - `ADMIN_PASSWORD`: contraseña larga y única (mínimo 14 caracteres).
+   - `FIREBASE_API_KEY`: apiKey de `docs/js/firebase-config.js`.
+   - `KOFI_VERIFICATION_TOKEN`: token secreto que Ko-fi muestra en la configuración del webhook. Guárdalo solo en Render, nunca en GitHub ni en este chat.
+   - `KOFI_MONTHLY_TIER_NAME`: nombre exacto del nivel mensual de Ko-fi.
+   - `KOFI_MONTHLY_AMOUNT`: importe exacto opcional; usa el valor decimal que Ko-fi envía.
+   - `KOFI_CURRENCY=MXN`.
+   - Mantén `FIREBASE_PROJECT_ID=ec-audio-accounts`, `CUSTOMER_WEB_URL` y `MAX_ACTIVE_DEVICES=2`.
+5. Comprueba `https://TU-SERVICIO.onrender.com/health`. Debe responder `ok: true`, `firebaseConfigured: true` y `kofiConfigured: true`.
 
-## 3. Configurar el webhook de Stripe
+## 3. Configurar el webhook Ko-fi
 
-En Stripe Dashboard > Developers > Webhooks:
+En Ko-fi configura la URL:
 
-1. Agrega un endpoint con la dirección https://TU-SERVICIO.onrender.com/api/customer/billing/webhook.
-2. Selecciona estos eventos:
-   - checkout.session.completed
-   - customer.subscription.created
-   - customer.subscription.updated
-   - customer.subscription.deleted
-   - invoice.payment_failed
-3. Guarda el endpoint y copia su Signing secret (whsec_...).
-4. En Render, agrega ese valor como STRIPE_WEBHOOK_SECRET y vuelve a desplegar.
+`https://TU-SERVICIO.onrender.com/api/webhooks/kofi`
 
-## 4. Conectar el sitio web
+El endpoint recibe el POST form-encoded de Ko-fi, lee el campo `data` y valida `verification_token`. Ko-fi debe recibir HTTP 200. Los eventos duplicados no renuevan la licencia dos veces.
 
-Después de obtener el dominio HTTPS de Render:
+## 4. Flujo de compra y vinculación
 
-1. Edita docs/js/api-config.js.
-2. Asigna el dominio sin barra final a API_BASE_URL, por ejemplo https://ec-audio-cloud.onrender.com.
-3. Publica los cambios en GitHub Pages.
+1. El cliente inicia sesión en [Mi cuenta EC Audio](https://locutorcm.github.io/EC-Audio-Hub/account.html).
+2. Pulsa “Unirme a EC Audio en Ko-fi”. El servidor genera un código de vinculación de un solo uso con 24 horas de vigencia.
+3. El cliente copia ese código en el campo de mensaje de su primera membresía/pago en Ko-fi.
+4. Ko-fi envía el webhook. Si el token, el nivel, la moneda y el pago son válidos, el servidor vincula el correo de Ko-fi a la cuenta Firebase y activa la licencia.
+5. Los pagos posteriores se relacionan con el correo Ko-fi previamente vinculado y renuevan 32 días.
+6. Client Hub consulta el mismo entitlement y aplica el límite de dos Macs.
 
-La página de cuenta cargará los precios de Stripe, abrirá Checkout y ofrecerá el portal de facturación. El panel administrativo estará en https://locutorcm.github.io/EC-Audio-Hub/admin-licenses.html.
+No se activa ninguna licencia por visitar el enlace, por enviar un mensaje o por un webhook sin pago de membresía válido.
 
-## 5. Conectar Client Hub
+## 5. Pruebas antes de vender
 
-Antes de publicar la siguiente versión macOS:
-
-1. En Sources/ECAudioHubClient/ClientLibrary.swift, asigna el mismo dominio HTTPS a apiBaseURL.
-2. Compila y publica Client Hub.
-3. Inicia sesión con Firebase. Si hay una suscripción comercial activa, el cliente consulta el servidor y registra el Mac.
-4. El límite inicial es de dos dispositivos por cuenta. El usuario puede liberar dispositivos desde la página de cuenta.
-
-Nota: este paso controla la cuenta y la instalación desde Client Hub. Para impedir que una copia ya instalada del AU/VST3 funcione en otro equipo, cada plugin debe integrar el SDK de validación de licencias y consultar el servidor al iniciar.
-
-## 6. Pruebas obligatorias antes de cobrar en producción
-
-- Ejecutar Checkout con claves y precios de prueba de Stripe.
-- Confirmar que el webhook llega y el endpoint responde 200.
-- Confirmar que la cuenta web muestra el plan activo.
-- Confirmar que Client Hub registra el dispositivo y reconoce el mismo plan.
-- Probar un segundo Mac y verificar el límite de dispositivos.
-- Probar cancelación al final del periodo y pago fallido.
-- Probar el portal de facturación.
-- Solo después cambiar a claves y precios Live de Stripe y crear un webhook Live independiente.
+- Configurar primero el webhook de prueba de Ko-fi y confirmar respuesta HTTP 200.
+- Confirmar que un nivel distinto, una donación simple o una moneda incorrecta no activan licencias.
+- Confirmar que un primer pago sin código no activa una cuenta.
+- Confirmar que el código de vinculación solo se utiliza una vez y caduca a las 24 horas.
+- Confirmar que un pago repetido con el mismo identificador no duplica la renovación.
+- Confirmar que cada renovación extiende el vencimiento 32 días y que una cuenta sin pagos vence.
+- Probar el límite de dos Macs y la revocación administrativa.
+- No anunciar que una suscripción está cancelada desde EC Audio: Ko-fi no envía ese evento al webhook.
 
 ## Seguridad y límites
 
-- Las claves secretas permanecen en Render; nunca en GitHub Pages ni en la app macOS.
-- La base SQLite debe estar en el disco persistente configurado en render.yaml.
-- Los webhooks se verifican con la firma de Stripe y se deduplican por ID de evento.
-- La cuenta de administrador usa credenciales separadas de las cuentas de clientes.
-- La administración temporal de licencias no sustituye la confirmación de pago de Stripe.
-- El modo de prueba de Stripe no cobra dinero. No uses claves Live hasta completar todas las pruebas.
+- El token de verificación de Ko-fi permanece exclusivamente en Render.
+- El webhook no confía en el correo para vincular una cuenta por primera vez: exige el código de un solo uso.
+- El webhook verifica el nivel exacto y la moneda configurada.
+- La base SQLite debe permanecer en el disco persistente de Render.
+- La prueba técnica de 60 segundos sigue separada de los pagos.
+- Esta integración controla el acceso desde Client Hub. Para bloquear un AU/VST3 copiado fuera del Client Hub, cada plugin debe integrar el SDK de validación runtime.
+- No vendas licencias hasta publicar el servidor, configurar el webhook y completar las pruebas descritas.
