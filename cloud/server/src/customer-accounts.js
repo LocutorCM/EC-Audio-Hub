@@ -91,6 +91,8 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
         ).get(payload.sub);
       } catch {
         const identity = await verifyFirebaseIdToken(token);
+        req.firebaseIdentity = identity;
+        req.firebaseIdToken = token;
         customer = db.prepare(
           'SELECT id,email,display_name,active,created_at,stripe_customer_id FROM customer_accounts WHERE firebase_uid=?'
         ).get(identity.uid);
@@ -243,25 +245,33 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
   });
 
   // Free demo activation: no payment is collected. Duration is controlled only by the server.
-  app.post('/api/customer/subscription/activate', customerAuth, (req, res) => {
+  app.post('/api/customer/subscription/activate', customerAuth, async (req, res) => {
+    const existing = db.prepare('SELECT id FROM customer_subscriptions WHERE customer_id=?').get(req.customer.id);
+    if (existing) return res.status(409).json({ error: 'Esta cuenta ya tiene una prueba o licencia registrada.' });
+
+    // Check the original Firestore trial before allowing a legacy API trial.
+    if (req.firebaseIdentity && req.firebaseIdToken) {
+      try {
+        const url = 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(firebaseProjectId) +
+          '/databases/(default)/documents/ecAudioSubscriptions/' + encodeURIComponent(req.firebaseIdentity.uid);
+        const response = await fetch(url, {
+          headers: { Authorization: 'Bearer ' + req.firebaseIdToken },
+          signal: AbortSignal.timeout(10000)
+        });
+        if (response.ok) return res.status(409).json({ error: 'La prueba gratuita de esta cuenta ya fue utilizada.' });
+        if (response.status !== 404) return res.status(503).json({ error: 'No se pudo comprobar el historial de prueba en Firebase.' });
+      } catch {
+        return res.status(503).json({ error: 'No se pudo comprobar el historial de prueba en Firebase.' });
+      }
+    }
+
     const now = new Date();
     const startedAt = now.toISOString();
     const expiresAt = new Date(now.getTime() + 60 * 1000).toISOString();
-    const existing = db.prepare(
-      'SELECT id FROM customer_subscriptions WHERE customer_id=?'
-    ).get(req.customer.id);
-    if (existing) {
-      db.prepare(`
-        UPDATE customer_subscriptions
-        SET status='active',plan='trial',started_at=?,expires_at=?,updated_at=?
-        WHERE customer_id=?
-      `).run(startedAt, expiresAt, startedAt, req.customer.id);
-    } else {
-      db.prepare(`
-        INSERT INTO customer_subscriptions(id,customer_id,status,plan,started_at,expires_at,updated_at)
-        VALUES(?,?,'active','trial',?,?,?)
-      `).run(crypto.randomUUID(), req.customer.id, startedAt, expiresAt, startedAt);
-    }
+    db.prepare(`
+      INSERT INTO customer_subscriptions(id,customer_id,status,plan,started_at,expires_at,updated_at)
+      VALUES(?,?,'active','trial',?,?,?)
+    `).run(crypto.randomUUID(), req.customer.id, startedAt, expiresAt, startedAt);
     return res.status(200).json({
       message: 'Acceso de prueba activado por 60 segundos. No se realizó ningún cobro.',
       subscription: subscriptionFor(req.customer.id)
@@ -445,12 +455,14 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
     const subscription = subscriptionFor(req.customer.id);
     if (!subscription.active) return res.status(403).json({ error: 'Necesitas una licencia activa para registrar este dispositivo.' });
     const now = new Date().toISOString();
-    const existing = db.prepare('SELECT device_id FROM customer_devices WHERE device_id=? AND customer_id=?').get(deviceId, req.customer.id);
-    if (!existing) {
+    const existing = db.prepare('SELECT device_id,active FROM customer_devices WHERE device_id=? AND customer_id=?').get(deviceId, req.customer.id);
+    if (!existing || existing.active !== 1) {
       const count = db.prepare('SELECT COUNT(*) AS count FROM customer_devices WHERE customer_id=? AND active=1').get(req.customer.id).count;
       if (count >= maxActiveDevices) {
         return res.status(409).json({ error: `Has alcanzado el límite de ${maxActiveDevices} dispositivos. Libera uno desde tu cuenta EC Audio.` });
       }
+    }
+    if (!existing) {
       db.prepare('INSERT INTO customer_devices(device_id,customer_id,device_name,platform,active,first_seen_at,last_seen_at) VALUES(?,?,?,?,1,?,?)')
         .run(deviceId, req.customer.id, deviceName, platform, now, now);
     } else {
