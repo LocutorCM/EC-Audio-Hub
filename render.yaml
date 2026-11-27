@@ -29,5 +29,17 @@ services:
         sync: false
       - key: FIREBASE_PROJECT_ID
         value: ec-audio-accounts
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_MONTHLY_PRICE_ID
+        sync: false
+      - key: STRIPE_ANNUAL_PRICE_ID
+        sync: false
+      - key: CUSTOMER_WEB_URL
+        value: https://locutorcm.github.io/EC-Audio-Hub
+      - key: MAX_ACTIVE_DEVICES
+        value: "2"
       - key: MAX_UPLOAD_GB
         value: "2"
