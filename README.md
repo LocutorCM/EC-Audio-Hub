@@ -17,8 +17,8 @@ EC Audio Hub es la plataforma de distribución, cuentas y licencias para los plu
 El sistema comercial integra membresías mensuales de Ko-fi. El servidor confirma las licencias únicamente a partir de webhooks validados de Ko-fi y de un código de vinculación de un solo uso; los clientes nunca pueden escribir una licencia comercial directamente.
 
 Incluye:
-- Checkout de suscripción y portal de facturación del cliente.
-- Sincronización de estados activos, pagos fallidos y cancelaciones.
+- Membresía mensual de Ko-fi y renovación automática de licencias al recibir cada pago.
+- Vinculación segura entre la cuenta Firebase y el correo de Ko-fi.
 - Límite configurable de dispositivos (por defecto, 2 Macs por cuenta).
 - Panel administrativo para consultar clientes, revocar licencias, conceder accesos temporales y liberar dispositivos.
 - Control de acceso a la instalación y distribución de plugins AU/VST3 mediante Client Hub.
