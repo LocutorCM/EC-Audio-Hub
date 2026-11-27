@@ -29,7 +29,7 @@ La prueba gratuita existente continúa siendo una demostración técnica de 60 s
 
 Sigue docs/COMMERCIAL-LICENSING.md. El backend necesita un servicio HTTPS persistente (el Blueprint de Render utiliza el plan Starter y un disco persistente), una cuenta Ko-fi y el token secreto del webhook configurado como variable privada del servidor.
 
-**Estado:** la adaptación está preparada en la rama feature/kofi-commercial-licensing y en revisión en el PR #5; todavía no está integrada en main. No hay un servidor de pagos publicado ni se ha conectado el webhook de Ko-fi. La validación de licencia dentro de cada plugin cuando se carga en Logic Pro todavía requiere integrar el SDK de licencia en el código fuente de cada plugin. No vendas licencias hasta completar la configuración, esa integración y las pruebas de webhooks.
+**Estado:** la integración Ko-fi ya está en main. Todavía no hay un servidor de pagos publicado ni se ha conectado el webhook de Ko-fi. La validación de licencia dentro de cada plugin cuando se carga en Logic Pro todavía requiere integrar el SDK de licencia en el código fuente de cada plugin. No vendas licencias hasta completar la configuración, esa integración y las pruebas de webhooks.
 
 ## Compilar apps macOS
 
