@@ -176,7 +176,7 @@ final class ClientLibrary: ObservableObject {
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
-    private func installPluginFile(_ downloadedURL: URL, plugin: HubPlugin) throws -> Bool {
+    private func installPluginFile(_ downloadedURL: URL, plugin: HubPlugin) throws -> [URL]? {
         let fileManager = FileManager.default
         let ext = plugin.fileExtension
         let installRoot = fileManager.homeDirectoryForCurrentUser
@@ -188,10 +188,10 @@ final class ClientLibrary: ObservableObject {
             let destination = folder.appendingPathComponent(plugin.fileName, isDirectory: true)
             if fileManager.fileExists(atPath: destination.path) { try fileManager.removeItem(at: destination) }
             try fileManager.copyItem(at: downloadedURL, to: destination)
-            return true
+            return [destination]
         }
 
-        guard ext == "zip" else { return false }
+        guard ext == "zip" else { return nil }
         let extraction = fileManager.temporaryDirectory.appendingPathComponent("ECAudioInstall-\(UUID().uuidString)", isDirectory: true)
         try fileManager.createDirectory(at: extraction, withIntermediateDirectories: true)
         defer { try? fileManager.removeItem(at: extraction) }
@@ -215,8 +215,9 @@ final class ClientLibrary: ObservableObject {
                 enumerator.skipDescendants()
             }
         }
-        guard !bundles.isEmpty else { return false }
+        guard !bundles.isEmpty else { return nil }
 
+        var installedBundles: [URL] = []
         for bundle in bundles {
             let suffix = bundle.pathExtension.lowercased()
             let folder = installRoot.appendingPathComponent(suffix == "vst3" ? "VST3" : "Components", isDirectory: true)
@@ -224,8 +225,9 @@ final class ClientLibrary: ObservableObject {
             let destination = folder.appendingPathComponent(bundle.lastPathComponent, isDirectory: true)
             if fileManager.fileExists(atPath: destination.path) { try fileManager.removeItem(at: destination) }
             try fileManager.copyItem(at: bundle, to: destination)
+            installedBundles.append(destination)
         }
-        return true
+        return installedBundles
     }
 
     private func saveForManualInstall(_ source: URL, fileName: String) throws -> URL {
