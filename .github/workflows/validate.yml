@@ -1,0 +1,33 @@
+name: Validate EC Audio Hub
+
+on:
+  push:
+    branches:
+      - main
+      - feature/customer-accounts-subscriptions
+  pull_request:
+    branches: [main]
+
+jobs:
+  cloud-api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloud/server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cloud/server/package-lock.json
+      - run: npm install --package-lock=false
+      - run: node --check src/server.js
+      - run: node --check src/customer-accounts.js
+
+  macos-client:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Client Hub
+        run: swift build --target EC-Audio-Hub-Client
