@@ -10,11 +10,11 @@ EC Audio Hub es la plataforma de distribución, cuentas y licencias para los plu
 - macOS Admin: publica plugins AU/VST3 y portadas en GitHub Releases.
 - macOS Client Hub: explora releases, verifica SHA-256 e instala plugins administrados.
 - Firebase: identidad central para la web y Client Hub (ec-audio-accounts).
-- EC Audio Cloud API: valida identidades Firebase, gestiona suscripciones y dispositivos y procesa eventos firmados de Stripe.
+- EC Audio Cloud API: valida identidades Firebase, gestiona suscripciones y dispositivos y procesa pagos de membresía notificados por Ko-fi.
 
 ## Licencias y pagos
 
-El sistema comercial preparado integra Stripe Checkout para suscripciones mensuales y anuales en MXN. El servidor confirma las licencias únicamente a partir de webhooks verificados de Stripe; los clientes nunca pueden escribir una licencia comercial directamente.
+El sistema comercial integra membresías mensuales de Ko-fi. El servidor confirma las licencias únicamente a partir de webhooks validados de Ko-fi y de un código de vinculación de un solo uso; los clientes nunca pueden escribir una licencia comercial directamente.
 
 Incluye:
 - Checkout de suscripción y portal de facturación del cliente.
@@ -23,13 +23,13 @@ Incluye:
 - Panel administrativo para consultar clientes, revocar licencias, conceder accesos temporales y liberar dispositivos.
 - Control de acceso a la instalación y distribución de plugins AU/VST3 mediante Client Hub.
 
-La prueba gratuita existente continúa siendo una demostración técnica de 60 segundos y no procesa pagos. Los importes comerciales se configuran en Stripe; no se han inventado precios ni se han creado cargos.
+La prueba gratuita existente continúa siendo una demostración técnica de 60 segundos y no procesa pagos. El nivel y el importe de la membresía se configuran en Ko-fi y en las variables privadas del servidor; no se han inventado precios ni se han creado cargos.
 
 ## Configuración y despliegue comercial
 
-Sigue docs/COMMERCIAL-LICENSING.md. El backend necesita un servicio HTTPS persistente (el Blueprint de Render utiliza el plan Starter y un disco persistente), una cuenta Stripe y claves privadas configuradas como variables secretas del servidor.
+Sigue docs/COMMERCIAL-LICENSING.md. El backend necesita un servicio HTTPS persistente (el Blueprint de Render utiliza el plan Starter y un disco persistente), una cuenta Ko-fi y el token secreto del webhook configurado como variable privada del servidor.
 
-**Estado:** el código está integrado en main. Todavía no hay un servidor de pagos publicado ni se han conectado claves Stripe. La validación de licencia dentro de cada plugin cuando se carga en Logic Pro todavía requiere integrar el SDK de licencia en el código fuente de cada plugin. No vendas licencias hasta completar la configuración, esa integración y las pruebas de webhooks.
+**Estado:** el código está integrado en main. Todavía no hay un servidor de pagos publicado ni se ha conectado el webhook de Ko-fi. La validación de licencia dentro de cada plugin cuando se carga en Logic Pro todavía requiere integrar el SDK de licencia en el código fuente de cada plugin. No vendas licencias hasta completar la configuración, esa integración y las pruebas de webhooks.
 
 ## Compilar apps macOS
 
@@ -37,4 +37,4 @@ Requiere Xcode 14+ y Swift 5.7+. GitHub Actions compila Intel + Apple Silicon y 
 
 ## Seguridad
 
-Nunca subas STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, JWT_SECRET, contraseñas de administrador ni tokens privados al repositorio. Usa variables privadas del proveedor de hosting.
+Nunca subas KOFI_VERIFICATION_TOKEN, JWT_SECRET, contraseñas de administrador ni tokens privados al repositorio. Usa variables privadas del proveedor de hosting.
