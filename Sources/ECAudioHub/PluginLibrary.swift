@@ -1,6 +1,5 @@
 import Foundation
 import Combine
-import AppKit
 
 @MainActor
 final class PluginLibrary: ObservableObject {
@@ -41,20 +40,39 @@ final class PluginLibrary: ObservableObject {
     }
 
     func download(_ plugin: Plugin) async throws -> URL {
-        let (temporary, response) = try await URLSession.shared.download(from: plugin.downloadURL)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+        guard plugin.downloadURL.scheme?.lowercased() == "https",
+              plugin.downloadURL.host != nil else { throw URLError(.badURL) }
+
+        var request = URLRequest(url: plugin.downloadURL)
+        request.timeoutInterval = 300
+        request.setValue("application/octet-stream,*/*", forHTTPHeaderField: "Accept")
+        let (temporary, response) = try await URLSession.shared.download(for: request)
+        guard let http = response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode) else {
             throw URLError(.badServerResponse)
         }
+
         let folder = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("EC Audio Hub", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let name = plugin.downloadURL.lastPathComponent.isEmpty ? plugin.name : plugin.downloadURL.lastPathComponent
-        let destination = folder.appendingPathComponent(name)
-        if FileManager.default.fileExists(atPath: destination.path) {
-            try FileManager.default.removeItem(at: destination)
-        }
+
+        let proposedName = plugin.downloadURL.lastPathComponent.removingPercentEncoding ?? plugin.downloadURL.lastPathComponent
+        let safeName = proposedName.isEmpty || proposedName == "/" ? plugin.name + ".download" : URL(fileURLWithPath: proposedName).lastPathComponent
+        let destination = uniqueDestination(in: folder, name: safeName)
         try FileManager.default.moveItem(at: temporary, to: destination)
         return destination
+    }
+
+    private func uniqueDestination(in folder: URL, name: String) -> URL {
+        let base = URL(fileURLWithPath: name)
+        var candidate = folder.appendingPathComponent(name)
+        var index = 2
+        while FileManager.default.fileExists(atPath: candidate.path) {
+            let nextName = base.deletingPathExtension().lastPathComponent + " (\(index))." + base.pathExtension
+            candidate = folder.appendingPathComponent(nextName)
+            index += 1
+        }
+        return candidate
     }
 
     private func load() {
