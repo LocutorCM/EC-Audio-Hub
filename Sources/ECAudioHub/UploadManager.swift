@@ -211,8 +211,8 @@ final class UploadManager: ObservableObject {
         return components?.url
     }
 
-    private func createMultipartFile(source: URL, destination: URL, boundary: String) throws {
-        let fileName = source.lastPathComponent.replacingOccurrences(of: "\"", with: "")
+    private func createMultipartFile(source: URL, fileName originalName: String, destination: URL, boundary: String) throws {
+        let fileName = originalName.replacingOccurrences(of: "\"", with: "")
         let mime = UTType(filenameExtension: source.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
         let prefix = "--\(boundary)\r\nContent-Disposition: form-data; name=\"installer\"; filename=\"\(fileName)\"\r\nContent-Type: \(mime)\r\n\r\n"
         let suffix = "\r\n--\(boundary)--\r\n"
