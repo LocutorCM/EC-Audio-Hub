@@ -300,7 +300,7 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
   `);
   const accountColumns = db.prepare('PRAGMA table_info(customer_accounts)').all().map(column => column.name);
   if (!accountColumns.includes('kofi_email')) db.exec('ALTER TABLE customer_accounts ADD COLUMN kofi_email TEXT');
-  db.exec('CREATE INDEX IF NOT EXISTS idx_customer_accounts_kofi_email ON customer_accounts(kofi_email)');
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_accounts_kofi_email ON customer_accounts(kofi_email COLLATE NOCASE) WHERE kofi_email IS NOT NULL');
 
   app.get('/api/customer/billing/plans', (_req, res) => {
     if (!kofiVerificationToken || !kofiMonthlyTierName) {
