@@ -17,6 +17,7 @@ final class ClientLibrary: ObservableObject {
     @Published var accountEmail = ""
     @Published var subscriptionStatus = "Sin verificar"
     @Published var subscriptionActive = false
+    @Published var trialUsed = false
     @Published var isAccountBusy = false
     @Published var accountMessage = ""
 
@@ -661,6 +662,7 @@ final class ClientLibrary: ObservableObject {
 
     private func applySubscription(_ subscription: CustomerSubscriptionDTO) {
         subscriptionActive = subscription.active
+        trialUsed = subscription.trialUsed
         let expiry = subscription.remainingSeconds.map { " · \($0) s restantes" } ?? ""
         subscriptionStatus = subscription.active ? "Acceso activo" + expiry :
             (subscription.status == "expired" ? "Prueba vencida" : "Sin acceso activo")
@@ -680,6 +682,7 @@ final class ClientLibrary: ObservableObject {
         UserDefaults.standard.removeObject(forKey: firebaseUIDKey)
         accountEmail = ""
         subscriptionActive = false
+        trialUsed = false
         subscriptionStatus = "Sesión cerrada"
         UserDefaults.standard.removeObject(forKey: "ECAudioHubClient.accountEmail")
         UserDefaults.standard.set(subscriptionStatus, forKey: "ECAudioHubClient.subscriptionStatus")
