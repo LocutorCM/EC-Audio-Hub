@@ -48,14 +48,14 @@ struct ClientView: View {
         ), titleVisibility: .visible) {
             Button("Desinstalar", role: .destructive) {
                 if let name = pluginToUninstall {
-                    do { try library.uninstallPlugin(named: name) }
+                    do { try library.uninstallBundle(at: name) }
                     catch { library.errorMessage = error.localizedDescription }
                 }
                 pluginToUninstall = nil
             }
             Button("Cancelar", role: .cancel) { pluginToUninstall = nil }
         } message: {
-            Text("Se eliminarán los archivos AU/VST3 de la carpeta de plugins de tu usuario.")
+            Text("Se eliminará este bundle AU/VST3 de la carpeta de plugins de tu usuario, aunque no proceda de EC Audio Hub.")
         }
         .task {
             await library.refresh()
@@ -258,18 +258,20 @@ struct ClientView: View {
     private var installedSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Plugins instalados").font(.system(size: 18, weight: .bold, design: .rounded)).foregroundColor(.white)
-            if library.installedVersions.isEmpty {
+            if library.detectedInstalledPlugins.isEmpty {
                 emptyState
             } else {
-                ForEach(library.installedVersions.keys.sorted(), id: \.self) { name in
+                ForEach(library.detectedInstalledPlugins) { plugin in
                     HStack {
                         Image(systemName: "checkmark.seal.fill").foregroundColor(.green)
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(name).font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
-                            Text("Versión \(library.installedVersions[name] ?? "")").font(.system(size: 10)).foregroundColor(.secondary)
+                            Text(plugin.name).font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                            Text(plugin.format + (plugin.version.map { " · Versión " + $0 } ?? " · Instalado en este Mac"))
+                                .font(.system(size: 10)).foregroundColor(.secondary)
+                            Text(plugin.path).font(.system(size: 9)).foregroundColor(Color(hex: 0x7188A4)).lineLimit(1)
                         }
                         Spacer()
-                        Button("Desinstalar") { pluginToUninstall = name }
+                        Button("Desinstalar") { pluginToUninstall = plugin.path }
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundColor(Color(hex: 0xFF9B9B))
                             .padding(.horizontal, 11).padding(.vertical, 7)
