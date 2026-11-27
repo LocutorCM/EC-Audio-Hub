@@ -11,10 +11,11 @@ import {
   updateProfile
 } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { API_BASE_URL } from "./api-config.js";
+import { getFirestore, doc, getDoc, runTransaction, Timestamp, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const firestore = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: "select_account" });
 
@@ -60,61 +61,97 @@ function showSignedOut() {
   accountPanel.classList.add("hidden");
   authPanel.classList.remove("hidden");
 }
-async function syncCustomerSession(user) {
+async function readSubscription(user) {
+  const reference = doc(firestore, "ecAudioSubscriptions", user.uid);
+  const snapshot = await getDoc(reference);
+  if (!snapshot.exists()) {
+    return { status: "inactive", active: false, plan: null, expiresAt: null, remainingSeconds: 0, trialUsed: false };
+  }
+  const data = snapshot.data();
+  const expiresAt = data.expiresAt?.toDate?.() || null;
+  const active = data.status === "active" && expiresAt instanceof Date && expiresAt.getTime() > Date.now();
+  return {
+    status: data.status === "active" && !active ? "expired" : (data.status || "inactive"),
+    active,
+    plan: data.plan || null,
+    expiresAt,
+    remainingSeconds: active ? Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / 1000)) : 0,
+    trialUsed: data.trialUsed === true
+  };
+}
+
+function renderSubscription(subscription) {
   const status = $("subscriptionStatus");
   const details = $("subscriptionDetails");
   const trialButton = $("trialBtn");
-  if (!API_BASE_URL) {
-    status.textContent = "Identidad Firebase activa · API de licencias pendiente de publicar";
-    details.textContent = "Cuando el servidor esté publicado, esta cuenta compartirá su licencia con EC Audio Client.";
-    trialButton.disabled = true;
-    return;
+  if (subscription.active) {
+    status.textContent = "Prueba activa · " + subscription.remainingSeconds + " segundos restantes";
+    details.textContent = "Tu acceso está guardado en Firebase y se comparte con EC Audio Client.";
+  } else if (subscription.trialUsed) {
+    status.textContent = "Prueba gratuita utilizada";
+    details.textContent = "Esta cuenta ya utilizó su prueba de 60 segundos.";
+  } else {
+    status.textContent = "Cuenta Firebase conectada · sin licencia activa";
+    details.textContent = "Puedes activar una prueba gratuita de 60 segundos. No se realizará ningún cobro.";
   }
+  trialButton.disabled = subscription.trialUsed || subscription.active;
+  trialButton.textContent = subscription.trialUsed ? "Prueba gratuita utilizada" : "Activar prueba gratuita · $0 MXN";
+}
+
+async function syncCustomerSession(user) {
   try {
-    const idToken = await user.getIdToken();
-    const response = await fetch(API_BASE_URL + "/api/customer/auth/firebase", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idToken })
-    });
-    const session = await response.json();
-    if (!response.ok) throw new Error(session.error || "No se pudo vincular la cuenta EC Audio.");
-    sessionStorage.setItem("ecAudioCustomerToken", session.token);
-    await refreshSubscription();
+    const subscription = await readSubscription(user);
+    renderSubscription(subscription);
   } catch (error) {
-    status.textContent = "No se pudo sincronizar la licencia";
-    details.textContent = error.message;
-    trialButton.disabled = true;
+    $("subscriptionStatus").textContent = "No se pudo consultar la licencia";
+    $("subscriptionDetails").textContent = error.message || "Activa Cloud Firestore en el proyecto Firebase y publica las reglas de seguridad de EC Audio.";
+    $("trialBtn").disabled = true;
   }
 }
 
 async function refreshSubscription() {
-  const token = sessionStorage.getItem("ecAudioCustomerToken");
-  if (!token || !API_BASE_URL) return;
-  const response = await fetch(API_BASE_URL + "/api/customer/subscription", { headers: { Authorization: "Bearer " + token } });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error || "No se pudo consultar la licencia.");
-  const sub = payload.subscription;
-  $("subscriptionStatus").textContent = sub.active ? "Acceso activo · " + (sub.remainingSeconds ?? 0) + " segundos restantes" : (sub.status === "expired" ? "Prueba vencida" : "Sin licencia activa");
-  $("subscriptionDetails").textContent = sub.active ? "Tu licencia está sincronizada con EC Audio Client." : "Activa la prueba gratuita de 60 segundos para comprobar el sistema.";
-  $("trialBtn").disabled = false;
+  const user = auth.currentUser;
+  if (!user) return;
+  const subscription = await readSubscription(user);
+  renderSubscription(subscription);
 }
 
 $("trialBtn").addEventListener("click", async () => {
-  const token = sessionStorage.getItem("ecAudioCustomerToken");
-  if (!token || !API_BASE_URL) return;
+  const user = auth.currentUser;
+  if (!user || busy) return;
   const button = $("trialBtn");
   button.disabled = true;
   button.textContent = "Activando…";
   try {
-    const response = await fetch(API_BASE_URL + "/api/customer/subscription/activate", {
-      method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: "{}"
+    const reference = doc(firestore, "ecAudioSubscriptions", user.uid);
+    await runTransaction(firestore, async (transaction) => {
+      const existing = await transaction.get(reference);
+      if (existing.exists()) {
+        throw new Error("La prueba gratuita de esta cuenta ya fue utilizada.");
+      }
+      transaction.set(reference, {
+        uid: user.uid,
+        email: user.email || "",
+        status: "active",
+        plan: "trial",
+        startedAt: serverTimestamp(),
+        expiresAt: Timestamp.fromMillis(Date.now() + 60 * 1000),
+        trialUsed: true
+      });
     });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || "No se pudo activar la prueba.");
     await refreshSubscription();
-    say(payload.message, "ok");
-  } catch (error) { say(error.message, "error"); }
-  finally { button.textContent = "Activar prueba gratuita · $0 MXN"; button.disabled = false; }
+    say("Prueba gratuita activada durante 60 segundos. No se realizó ningún cobro.", "ok");
+  } catch (error) {
+    say(error.message || "No se pudo activar la prueba gratuita. Revisa la configuración de Cloud Firestore.", "error");
+    try { await refreshSubscription(); } catch {}
+  } finally {
+    const current = auth.currentUser;
+    if (current) {
+      try { renderSubscription(await readSubscription(current)); } catch { button.disabled = true; }
+    }
+  }
 });
+
 function friendlyError(error) {
   const code = error?.code || "";
   const messages = {
@@ -210,7 +247,9 @@ function returnToNativeClient(user) {
     const callback = "ecaudiohub://auth#" + new URLSearchParams({
       idToken,
       email: user.email || "",
-      displayName: user.displayName || ""
+      displayName: user.displayName || "",
+      uid: user.uid,
+      refreshToken: user.refreshToken || ""
     }).toString();
     window.location.href = callback;
   }).catch((error) => say(friendlyError(error), "error"));
