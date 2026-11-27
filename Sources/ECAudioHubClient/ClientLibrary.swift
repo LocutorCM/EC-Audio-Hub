@@ -599,6 +599,55 @@ final class ClientLibrary: ObservableObject {
     }
 }
 
+enum ClientAccountError: LocalizedError {
+    case apiNotConfigured
+    case server(String)
+    var errorDescription: String? {
+        switch self {
+        case .apiNotConfigured:
+            return "Falta configurar la dirección HTTPS del servidor EC Audio."
+        case .server(let message):
+            return message
+        }
+    }
+}
+
+private enum KeychainStore {
+    static func read(key: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "EC Audio Hub Client",
+            kSecAttrAccount as String: key,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+              let data = item as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+    static func save(_ value: String, key: String) {
+        let data = Data(value.utf8)
+        delete(key: key)
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "EC Audio Hub Client",
+            kSecAttrAccount as String: key,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+        ]
+        SecItemAdd(query as CFDictionary, nil)
+    }
+    static func delete(key: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "EC Audio Hub Client",
+            kSecAttrAccount as String: key
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
+}
+
 enum ClientInstallError: LocalizedError {
     case checksumMismatch
     case archiveExtractionFailed
