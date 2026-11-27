@@ -93,7 +93,7 @@ app.use((req, res, next) => {
 
 installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret: JWT_SECRET, firebaseApiKey: FIREBASE_API_KEY, firebaseProjectId: FIREBASE_PROJECT_ID, loginLimiter: rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, standardHeaders: 'draft-7', legacyHeaders: false }) });
 
-app.get('/health', (_req, res) => res.json({ ok: true, service: 'EC Audio Cloud API', customerAccounts: true, demoTrialSeconds: 60 }));
+app.get('/health', (_req, res) => res.json({ ok: true, service: 'EC Audio Cloud API', customerAccounts: true, firebaseConfigured: Boolean(FIREBASE_API_KEY && FIREBASE_PROJECT_ID), demoTrialSeconds: 60 }));
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
