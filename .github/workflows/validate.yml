@@ -28,4 +28,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build Client Hub
-        run: swift build --target EC-Audio-Hub-Client
+        run: swift build --target ECAudioHubClient
