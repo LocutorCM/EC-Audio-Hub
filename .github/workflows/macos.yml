@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -70,3 +70,13 @@ jobs:
         with:
           name: EC-Audio-Hub-Client-macOS-Universal
           path: EC-Audio-Hub-Client-macOS-Universal.zip
+
+      - name: Publish permanent GitHub Release downloads
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: client-hub-${{ github.run_number }}
+          name: EC Audio Hub ${{ github.run_number }}
+          make_latest: true
+          files: |
+            EC-Audio-Hub-Client-macOS-Universal.zip
+            EC-Audio-Hub-Admin-macOS-Universal.zip
