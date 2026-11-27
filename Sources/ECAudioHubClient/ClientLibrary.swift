@@ -128,9 +128,11 @@ final class ClientLibrary: ObservableObject {
             }
 
             let installed = try installPluginFile(temporaryURL, plugin: plugin)
-            if installed {
+            if let installed, !installed.isEmpty {
                 installedVersions[plugin.name] = plugin.version
+                installedPaths[plugin.name] = installed.map(\.path)
                 UserDefaults.standard.set(installedVersions, forKey: installedKey)
+                UserDefaults.standard.set(installedPaths, forKey: installedPathsKey)
                 status = "\(plugin.name) \(plugin.version) se instaló correctamente."
             } else {
                 let destination = try saveForManualInstall(temporaryURL, fileName: plugin.fileName)
