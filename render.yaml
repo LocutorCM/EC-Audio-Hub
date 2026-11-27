@@ -36,7 +36,7 @@ services:
       - key: KOFI_MONTHLY_TIER_NAME
         sync: false
       - key: KOFI_CURRENCY
-        value: MXN
+        value: USD
       - key: KOFI_MONTHLY_AMOUNT
         value: "0"
       - key: CUSTOMER_WEB_URL
