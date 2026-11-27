@@ -1,0 +1,27 @@
+name: EC Audio Cloud API checks
+on:
+  push:
+    branches: [feature/commercial-licensing-stripe]
+    paths:
+      - "cloud/server/**"
+      - ".github/workflows/cloud-api-check.yml"
+  pull_request:
+    paths:
+      - "cloud/server/**"
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloud/server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install server dependencies
+        run: npm install --no-audit --no-fund
+      - name: Check server syntax
+        run: |
+          node --check src/server.js
+          node --check src/customer-accounts.js
