@@ -6,6 +6,7 @@ on:
     paths:
       - 'Sources/**'
       - 'Package.swift'
+      - 'cloud/server/**'
       - '.github/workflows/macos.yml'
   workflow_dispatch:
 
