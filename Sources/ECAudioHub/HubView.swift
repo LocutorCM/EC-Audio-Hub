@@ -1,12 +1,13 @@
 import SwiftUI
-import UniformTypeIdentifiers
+import AppKit
 
 struct HubView: View {
     @EnvironmentObject private var library: PluginLibrary
     @State private var showingAdd = false
-    @State private var selected: UUID?
     @State private var downloading: UUID?
+    @State private var downloadedURL: URL?
     @State private var status = "Tu biblioteca está lista"
+    @State private var showingError = false
 
     private let ink = Color(red: 0.07, green: 0.09, blue: 0.12)
     private let panel = Color(red: 0.11, green: 0.14, blue: 0.18)
@@ -26,6 +27,9 @@ struct HubView: View {
         .background(ink)
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showingAdd) { AddPluginView { library.add($0) } }
+        .alert("EC Audio Hub", isPresented: $showingError) {
+            Button("Aceptar", role: .cancel) { }
+        } message: { Text(status) }
     }
 
     private var sidebar: some View {
@@ -119,9 +123,12 @@ struct HubView: View {
                                 defer { downloading = nil }
                                 do {
                                     let url = try await library.download(plugin)
-                                    status = "Descarga guardada: \(url.lastPathComponent)"
-                                    NSWorkspace.shared.activateFileViewerSelecting([url])
-                                } catch { status = "No se pudo descargar: \(error.localizedDescription)" }
+                                    downloadedURL = url
+                                    status = "Descarga completada: \(url.lastPathComponent)"
+                                } catch {
+                                    status = "No se pudo descargar \(plugin.name): \(error.localizedDescription)"
+                                    showingError = true
+                                }
                             }
                         } label: {
                             HStack {
@@ -136,7 +143,14 @@ struct HubView: View {
                         }.buttonStyle(.plain).disabled(downloading != nil)
                     }
                     .padding(16).background(panel).overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.06), lineWidth: 1)).cornerRadius(12)
-                    .contextMenu { Button("Eliminar de mi biblioteca", role: .destructive) { library.remove(plugin) } }
+                    .contextMenu {
+                        Button("Mostrar en Finder") {
+                            if let downloadedURL, downloadedURL.lastPathComponent == plugin.downloadURL.lastPathComponent {
+                                NSWorkspace.shared.activateFileViewerSelecting([downloadedURL])
+                            }
+                        }
+                        Button("Eliminar de mi biblioteca", role: .destructive) { library.remove(plugin) }
+                    }
                 }
             }.padding(.horizontal, 28).padding(.bottom, 24)
         }
@@ -161,6 +175,13 @@ struct HubView: View {
             Circle().fill(Color.green).frame(width: 6, height: 6)
             Text(status).font(.system(size: 10)).foregroundColor(.secondary).lineLimit(1)
             Spacer()
+            if let downloadedURL {
+                Button("Abrir instalador") {
+                    NSWorkspace.shared.open(downloadedURL)
+                }
+                .font(.system(size: 10, weight: .semibold))
+                .buttonStyle(.plain).foregroundColor(accent)
+            }
             Text("\(library.filtered.count) ELEMENTOS").font(.system(size: 9, weight: .bold, design: .monospaced)).tracking(1).foregroundColor(.secondary)
         }.padding(.horizontal, 28).padding(.vertical, 12).background(panel)
     }
@@ -199,7 +220,7 @@ private struct AddPluginView: View {
             HStack {
                 Spacer()
                 Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Guardar plugin") { save() }.keyboardShortcut(.defaultAction).disabled(name.isEmpty || maker.isEmpty || url.isEmpty)
+                Button("Guardar plugin") { save() }.keyboardShortcut(.defaultAction).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || maker.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || url.isEmpty)
             }
         }
         .padding(24).frame(width: 440).background(Color(red: 0.11, green: 0.14, blue: 0.18)).preferredColorScheme(.dark)
@@ -213,12 +234,16 @@ private struct AddPluginView: View {
     }
 
     private func save() {
-        guard let parsed = URL(string: url), parsed.scheme?.lowercased() == "https", parsed.host != nil else {
+        guard let parsed = URL(string: url.trimmingCharacters(in: .whitespacesAndNewlines)),
+              parsed.scheme?.lowercased() == "https", parsed.host != nil else {
             error = "Ingresa una URL HTTPS válida y segura."
             return
         }
-        onSave(Plugin(name: name, maker: maker, version: version, format: format,
-                      category: category.isEmpty ? "Otros" : category, downloadURL: parsed, notes: notes))
+        onSave(Plugin(name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                      maker: maker.trimmingCharacters(in: .whitespacesAndNewlines),
+                      version: version, format: format,
+                      category: category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Otros" : category,
+                      downloadURL: parsed, notes: notes))
         dismiss()
     }
 }
