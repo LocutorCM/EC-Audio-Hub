@@ -117,7 +117,7 @@ struct HubView: View {
                         .font(.system(size: 16, weight: .bold))
                     Text("VST3 · AU · AAX · PKG · DMG · ZIP · APP y más")
                         .font(.system(size: 10, weight: .medium, design: .monospaced)).foregroundColor(.secondary)
-                    Text("Los archivos se envían directamente a tu servidor privado.")
+                    Text("Los bundles VST3 y AU se comprimen automáticamente en ZIP.")
                         .font(.system(size: 11)).foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity).frame(height: 205)
@@ -195,7 +195,7 @@ struct HubView: View {
         panel.title = "Seleccionar archivo para EC Audio Cloud"
         panel.message = "Elige el archivo del plugin o instalador que deseas subir."
         panel.canChooseFiles = true
-        panel.canChooseDirectories = false
+        panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.prompt = "Seleccionar"
         if panel.runModal() == .OK, let url = panel.url {
@@ -204,7 +204,16 @@ struct HubView: View {
     }
 
     private func fileSize(_ url: URL) -> String {
-        guard let size = try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber else { return "Tamaño desconocido" }
+        let values = try? FileManager.default.attributesOfItem(atPath: url.path)
+        if let type = values?[.type] as? FileAttributeType, type == .typeDirectory {
+            let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.fileSizeKey], options: [.skipsHiddenFiles])
+            var total: Int64 = 0
+            while let item = enumerator?.nextObject() as? URL {
+                if let size = try? item.resourceValues(forKeys: [.fileSizeKey]).fileSize { total += Int64(size) }
+            }
+            return ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
+        }
+        guard let size = values?[.size] as? NSNumber else { return "Tamaño desconocido" }
         let bytes = size.int64Value
         if bytes >= 1_073_741_824 { return String(format: "%.2f GB", Double(bytes) / 1_073_741_824) }
         if bytes >= 1_048_576 { return String(format: "%.1f MB", Double(bytes) / 1_048_576) }
