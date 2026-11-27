@@ -2,7 +2,7 @@
 
 const crypto = require('node:crypto');
 
-function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimiter, firebaseApiKey, firebaseProjectId, firebaseTokenVerifier }) {
+function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimiter, firebaseApiKey, firebaseProjectId, firebaseTokenVerifier, stripe, stripeWebhookSecret, stripeMonthlyPriceId, stripeAnnualPriceId, customerWebURL, maxActiveDevices = 2 }) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS customer_accounts (
       id TEXT PRIMARY KEY,
@@ -27,6 +27,33 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
   `);
 
   const customerColumns = db.prepare('PRAGMA table_info(customer_accounts)').all().map(column => column.name);
+  if (!customerColumns.includes('stripe_customer_id')) db.exec('ALTER TABLE customer_accounts ADD COLUMN stripe_customer_id TEXT');
+  const subscriptionColumns = db.prepare('PRAGMA table_info(customer_subscriptions)').all().map(column => column.name);
+  if (!subscriptionColumns.includes('stripe_subscription_id')) db.exec('ALTER TABLE customer_subscriptions ADD COLUMN stripe_subscription_id TEXT');
+  if (!subscriptionColumns.includes('stripe_price_id')) db.exec('ALTER TABLE customer_subscriptions ADD COLUMN stripe_price_id TEXT');
+  if (!subscriptionColumns.includes('cancel_at_period_end')) db.exec('ALTER TABLE customer_subscriptions ADD COLUMN cancel_at_period_end INTEGER NOT NULL DEFAULT 0');
+  if (!subscriptionColumns.includes('billing_interval')) db.exec('ALTER TABLE customer_subscriptions ADD COLUMN billing_interval TEXT');
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_subscriptions_stripe_id
+      ON customer_subscriptions(stripe_subscription_id) WHERE stripe_subscription_id IS NOT NULL;
+    CREATE TABLE IF NOT EXISTS stripe_webhook_events (
+      id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      processed_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS customer_devices (
+      device_id TEXT PRIMARY KEY,
+      customer_id TEXT NOT NULL,
+      device_name TEXT NOT NULL DEFAULT 'Mac',
+      platform TEXT NOT NULL DEFAULT 'macOS',
+      active INTEGER NOT NULL DEFAULT 1,
+      first_seen_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
+      FOREIGN KEY(customer_id) REFERENCES customer_accounts(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_customer_devices_customer
+      ON customer_devices(customer_id, active, last_seen_at DESC);
+  `);
   if (!customerColumns.includes('firebase_uid')) db.exec('ALTER TABLE customer_accounts ADD COLUMN firebase_uid TEXT');
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_accounts_firebase_uid ON customer_accounts(firebase_uid) WHERE firebase_uid IS NOT NULL');
 
@@ -48,31 +75,66 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
     { expiresIn: '30d', issuer: 'ec-audio-cloud', audience: 'ec-audio-customer' }
   );
 
-  function customerAuth(req, res, next) {
+  async function customerAuth(req, res, next) {
     const header = req.headers.authorization || '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : '';
     if (!token) return res.status(401).json({ error: 'Inicia sesión para continuar.' });
     try {
-      const payload = jwt.verify(token, jwtSecret, {
-        issuer: 'ec-audio-cloud',
-        audience: 'ec-audio-customer'
-      });
-      const customer = db.prepare(
-        'SELECT id,email,display_name,active,created_at FROM customer_accounts WHERE id=?'
-      ).get(payload.sub);
+      let customer = null;
+      try {
+        const payload = jwt.verify(token, jwtSecret, {
+          issuer: 'ec-audio-cloud',
+          audience: 'ec-audio-customer'
+        });
+        customer = db.prepare(
+          'SELECT id,email,display_name,active,created_at,stripe_customer_id FROM customer_accounts WHERE id=?'
+        ).get(payload.sub);
+      } catch {
+        const identity = await verifyFirebaseIdToken(token);
+        req.firebaseIdentity = identity;
+        req.firebaseIdToken = token;
+        customer = db.prepare(
+          'SELECT id,email,display_name,active,created_at,stripe_customer_id FROM customer_accounts WHERE firebase_uid=?'
+        ).get(identity.uid);
+        if (!customer) {
+          const existing = db.prepare(
+            'SELECT id,email,display_name,active,firebase_uid,stripe_customer_id FROM customer_accounts WHERE email=? COLLATE NOCASE'
+          ).get(identity.email);
+          if (existing) {
+            if (existing.firebase_uid && existing.firebase_uid !== identity.uid) {
+              return res.status(409).json({ error: 'Este correo ya está vinculado a otra identidad de Firebase.' });
+            }
+            if (!identity.emailVerified && !existing.firebase_uid) {
+              return res.status(403).json({ error: 'Verifica tu correo de Firebase antes de continuar.' });
+            }
+            db.prepare('UPDATE customer_accounts SET firebase_uid=? WHERE id=?').run(identity.uid, existing.id);
+            customer = db.prepare(
+              'SELECT id,email,display_name,active,created_at,stripe_customer_id FROM customer_accounts WHERE id=?'
+            ).get(existing.id);
+          } else {
+            const now = new Date().toISOString();
+            const id = crypto.randomUUID();
+            db.prepare('INSERT INTO customer_accounts(id,email,display_name,password_hash,active,created_at,firebase_uid) VALUES(?,?,?,?,1,?,?)')
+              .run(id, identity.email, identity.displayName, bcrypt.hashSync(crypto.randomBytes(32).toString('hex'), 12), now, identity.uid);
+            customer = db.prepare(
+              'SELECT id,email,display_name,active,created_at,stripe_customer_id FROM customer_accounts WHERE id=?'
+            ).get(id);
+          }
+        }
+      }
       if (!customer || !customer.active) {
         return res.status(403).json({ error: 'La cuenta no está disponible.' });
       }
       req.customer = customer;
       return next();
-    } catch {
-      return res.status(401).json({ error: 'La sesión venció. Inicia sesión nuevamente.' });
+    } catch (error) {
+      return res.status(error.status || 401).json({ error: error.message || 'La sesión venció. Inicia sesión nuevamente.' });
     }
   }
 
   function subscriptionFor(customerId) {
     const row = db.prepare(
-      'SELECT status,plan,started_at,expires_at,updated_at FROM customer_subscriptions WHERE customer_id=?'
+      'SELECT status,plan,started_at,expires_at,updated_at,stripe_subscription_id,stripe_price_id,cancel_at_period_end,billing_interval FROM customer_subscriptions WHERE customer_id=?'
     ).get(customerId);
     if (!row) return { status: 'inactive', plan: null, active: false, expiresAt: null, remainingSeconds: 0 };
     const expires = row.expires_at ? Date.parse(row.expires_at) : 0;
@@ -85,7 +147,10 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
       startedAt: row.started_at,
       expiresAt: row.expires_at,
       remainingSeconds: active ? Math.max(0, Math.ceil((expires - Date.now()) / 1000)) : 0,
-      updatedAt: row.updated_at
+      updatedAt: row.updated_at,
+      cancelAtPeriodEnd: row.cancel_at_period_end === 1,
+      billingInterval: row.billing_interval || null,
+      stripeSubscriptionId: row.stripe_subscription_id || null
     };
   }
 
@@ -180,29 +245,255 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
   });
 
   // Free demo activation: no payment is collected. Duration is controlled only by the server.
-  app.post('/api/customer/subscription/activate', customerAuth, (req, res) => {
+  app.post('/api/customer/subscription/activate', customerAuth, async (req, res) => {
+    const existing = db.prepare('SELECT id FROM customer_subscriptions WHERE customer_id=?').get(req.customer.id);
+    if (existing) return res.status(409).json({ error: 'Esta cuenta ya tiene una prueba o licencia registrada.' });
+
+    // Check the original Firestore trial before allowing a legacy API trial.
+    if (req.firebaseIdentity && req.firebaseIdToken) {
+      try {
+        const url = 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(firebaseProjectId) +
+          '/databases/(default)/documents/ecAudioSubscriptions/' + encodeURIComponent(req.firebaseIdentity.uid);
+        const response = await fetch(url, {
+          headers: { Authorization: 'Bearer ' + req.firebaseIdToken },
+          signal: AbortSignal.timeout(10000)
+        });
+        if (response.ok) return res.status(409).json({ error: 'La prueba gratuita de esta cuenta ya fue utilizada.' });
+        if (response.status !== 404) return res.status(503).json({ error: 'No se pudo comprobar el historial de prueba en Firebase.' });
+      } catch {
+        return res.status(503).json({ error: 'No se pudo comprobar el historial de prueba en Firebase.' });
+      }
+    }
+
     const now = new Date();
     const startedAt = now.toISOString();
     const expiresAt = new Date(now.getTime() + 60 * 1000).toISOString();
-    const existing = db.prepare(
-      'SELECT id FROM customer_subscriptions WHERE customer_id=?'
-    ).get(req.customer.id);
-    if (existing) {
-      db.prepare(`
-        UPDATE customer_subscriptions
-        SET status='active',plan='trial',started_at=?,expires_at=?,updated_at=?
-        WHERE customer_id=?
-      `).run(startedAt, expiresAt, startedAt, req.customer.id);
-    } else {
-      db.prepare(`
-        INSERT INTO customer_subscriptions(id,customer_id,status,plan,started_at,expires_at,updated_at)
-        VALUES(?,?,'active','trial',?,?,?)
-      `).run(crypto.randomUUID(), req.customer.id, startedAt, expiresAt, startedAt);
-    }
+    db.prepare(`
+      INSERT INTO customer_subscriptions(id,customer_id,status,plan,started_at,expires_at,updated_at)
+      VALUES(?,?,'active','trial',?,?,?)
+    `).run(crypto.randomUUID(), req.customer.id, startedAt, expiresAt, startedAt);
     return res.status(200).json({
       message: 'Acceso de prueba activado por 60 segundos. No se realizó ningún cobro.',
       subscription: subscriptionFor(req.customer.id)
     });
+  });
+
+  // Stripe catalog is read-only; secret keys and price IDs stay on the server.
+  app.get('/api/customer/billing/plans', async (_req, res) => {
+    if (!stripe || !stripeMonthlyPriceId || !stripeAnnualPriceId) {
+      return res.status(503).json({ error: 'La facturación todavía no está configurada.' });
+    }
+    try {
+      const [monthly, annual] = await Promise.all([
+        stripe.prices.retrieve(stripeMonthlyPriceId),
+        stripe.prices.retrieve(stripeAnnualPriceId)
+      ]);
+      const format = (price, plan) => {
+        const expectedInterval = plan === 'annual' ? 'year' : 'month';
+        if (!price.active || price.currency !== 'mxn' || price.unit_amount == null ||
+            price.unit_amount <= 0 || price.recurring?.interval !== expectedInterval) {
+          throw new Error('El precio de Stripe para ' + plan + ' debe estar activo, ser recurrente en MXN y tener el intervalo correcto.');
+        }
+        return {
+          plan,
+          priceId: price.id,
+          amount: price.unit_amount,
+          currency: String(price.currency).toUpperCase(),
+          interval: price.recurring.interval,
+          intervalCount: price.recurring.interval_count || 1
+        };
+      };
+      return res.json({ plans: [format(monthly, 'monthly'), format(annual, 'annual')] });
+    } catch (error) {
+      return res.status(502).json({ error: 'No se pudieron consultar los planes de Stripe.' });
+    }
+  });
+
+  app.post('/api/customer/billing/checkout', customerAuth, async (req, res) => {
+    if (!stripe || !stripeMonthlyPriceId || !stripeAnnualPriceId) {
+      return res.status(503).json({ error: 'La facturación todavía no está configurada.' });
+    }
+    const plan = String(req.body?.plan || '');
+    const price = plan === 'monthly' ? stripeMonthlyPriceId : plan === 'annual' ? stripeAnnualPriceId : null;
+    if (!price) return res.status(400).json({ error: 'Selecciona un plan mensual o anual válido.' });
+    const currentSubscription = subscriptionFor(req.customer.id);
+    if (currentSubscription.active && currentSubscription.plan !== 'trial') {
+      return res.status(409).json({ error: 'Ya tienes una suscripción comercial activa. Adminístrala desde el portal de facturación.' });
+    }
+    try {
+      const selectedPrice = await stripe.prices.retrieve(price);
+      const expectedInterval = plan === 'annual' ? 'year' : 'month';
+      if (!selectedPrice.active || selectedPrice.currency !== 'mxn' ||
+          selectedPrice.unit_amount == null || selectedPrice.unit_amount <= 0 ||
+          selectedPrice.recurring?.interval !== expectedInterval) {
+        return res.status(400).json({ error: 'El precio configurado no es un plan recurrente válido en MXN.' });
+      }
+      let stripeCustomerId = req.customer.stripe_customer_id;
+      if (!stripeCustomerId) {
+        const customer = await stripe.customers.create({
+          email: req.customer.email,
+          name: req.customer.display_name || undefined,
+          metadata: { ecAudioCustomerId: req.customer.id }
+        });
+        stripeCustomerId = customer.id;
+        db.prepare('UPDATE customer_accounts SET stripe_customer_id=? WHERE id=?').run(stripeCustomerId, req.customer.id);
+      }
+      const session = await stripe.checkout.sessions.create({
+        mode: 'subscription',
+        customer: stripeCustomerId,
+        client_reference_id: req.customer.id,
+        line_items: [{ price, quantity: 1 }],
+        allow_promotion_codes: true,
+        billing_address_collection: 'required',
+        locale: 'es',
+        metadata: { ecAudioCustomerId: req.customer.id, ecAudioPlan: plan },
+        subscription_data: { metadata: { ecAudioCustomerId: req.customer.id, ecAudioPlan: plan } },
+        success_url: `${customerWebURL}/account.html?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${customerWebURL}/account.html?checkout=cancelled`
+      });
+      return res.json({ url: session.url });
+    } catch (error) {
+      return res.status(502).json({ error: 'No se pudo iniciar el pago. Inténtalo nuevamente.' });
+    }
+  });
+
+  app.post('/api/customer/billing/portal', customerAuth, async (req, res) => {
+    if (!stripe || !req.customer.stripe_customer_id) {
+      return res.status(400).json({ error: 'Esta cuenta todavía no tiene una suscripción de Stripe.' });
+    }
+    try {
+      const session = await stripe.billingPortal.sessions.create({
+        customer: req.customer.stripe_customer_id,
+        return_url: `${customerWebURL}/account.html`
+      });
+      return res.json({ url: session.url });
+    } catch {
+      return res.status(502).json({ error: 'No se pudo abrir el portal de facturación.' });
+    }
+  });
+
+  function applyStripeSubscription(subscription) {
+    const stripeCustomerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id;
+    const customerId = subscription.metadata?.ecAudioCustomerId ||
+      db.prepare('SELECT id FROM customer_accounts WHERE stripe_customer_id=?').get(stripeCustomerId)?.id;
+    if (!customerId) return;
+    const priceId = subscription.items?.data?.[0]?.price?.id || null;
+    const plan = priceId === stripeAnnualPriceId ? 'annual' : priceId === stripeMonthlyPriceId ? 'monthly' : 'paid';
+    const status = subscription.status === 'active' || subscription.status === 'trialing'
+      ? 'active' : String(subscription.status || 'inactive');
+    const startedAt = subscription.current_period_start
+      ? new Date(subscription.current_period_start * 1000).toISOString() : new Date().toISOString();
+    const expiresAt = subscription.current_period_end
+      ? new Date(subscription.current_period_end * 1000).toISOString() : null;
+    const now = new Date().toISOString();
+    db.prepare('UPDATE customer_accounts SET stripe_customer_id=COALESCE(stripe_customer_id,?) WHERE id=?')
+      .run(stripeCustomerId || null, customerId);
+    const existing = db.prepare('SELECT id FROM customer_subscriptions WHERE customer_id=?').get(customerId);
+    if (existing) {
+      db.prepare(`
+        UPDATE customer_subscriptions SET status=?,plan=?,started_at=?,expires_at=?,updated_at=?,
+          stripe_subscription_id=?,stripe_price_id=?,cancel_at_period_end=?,billing_interval=?
+        WHERE customer_id=?
+      `).run(status, plan, startedAt, expiresAt, now, subscription.id, priceId,
+        subscription.cancel_at_period_end ? 1 : 0,
+        subscription.items?.data?.[0]?.price?.recurring?.interval || null, customerId);
+    } else {
+      db.prepare(`
+        INSERT INTO customer_subscriptions(id,customer_id,status,plan,started_at,expires_at,updated_at,
+          stripe_subscription_id,stripe_price_id,cancel_at_period_end,billing_interval)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?)
+      `).run(crypto.randomUUID(), customerId, status, plan, startedAt, expiresAt, now,
+        subscription.id, priceId, subscription.cancel_at_period_end ? 1 : 0,
+        subscription.items?.data?.[0]?.price?.recurring?.interval || null);
+    }
+  }
+
+  app.post('/api/customer/billing/webhook', async (req, res) => {
+    if (!stripe || !stripeWebhookSecret || !req.rawBody) {
+      return res.status(503).json({ error: 'El webhook de Stripe no está configurado.' });
+    }
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(req.rawBody, req.headers['stripe-signature'], stripeWebhookSecret);
+    } catch {
+      return res.status(400).json({ error: 'Firma de webhook inválida.' });
+    }
+    if (db.prepare('SELECT id FROM stripe_webhook_events WHERE id=?').get(event.id)) {
+      return res.json({ received: true, duplicate: true });
+    }
+    try {
+      if (event.type === 'checkout.session.completed') {
+        const session = event.data.object;
+        const customerId = session.metadata?.ecAudioCustomerId || session.client_reference_id;
+        const stripeCustomerId = typeof session.customer === 'string' ? session.customer : session.customer?.id;
+        if (customerId && stripeCustomerId) {
+          db.prepare('UPDATE customer_accounts SET stripe_customer_id=? WHERE id=?').run(stripeCustomerId, customerId);
+        }
+        if (session.subscription) {
+          const subscription = await stripe.subscriptions.retrieve(
+            typeof session.subscription === 'string' ? session.subscription : session.subscription.id
+          );
+          applyStripeSubscription(subscription);
+        }
+      } else if (event.type === 'customer.subscription.created' ||
+                 event.type === 'customer.subscription.updated' ||
+                 event.type === 'customer.subscription.deleted') {
+        applyStripeSubscription(event.data.object);
+      } else if (event.type === 'invoice.payment_failed') {
+        const invoice = event.data.object;
+        const subscriptionId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id;
+        if (subscriptionId) {
+          db.prepare("UPDATE customer_subscriptions SET status='past_due',updated_at=? WHERE stripe_subscription_id=?")
+            .run(new Date().toISOString(), subscriptionId);
+        }
+      }
+      db.prepare('INSERT INTO stripe_webhook_events(id,event_type,processed_at) VALUES(?,?,?)')
+        .run(event.id, event.type, new Date().toISOString());
+      return res.json({ received: true });
+    } catch {
+      return res.status(500).json({ error: 'No se pudo procesar el evento de Stripe.' });
+    }
+  });
+
+  // Each paid seat is bound to a stable Client Hub installation identifier.
+  app.get('/api/customer/devices', customerAuth, (req, res) => {
+    const devices = db.prepare(
+      'SELECT device_id AS deviceId,device_name AS deviceName,platform,first_seen_at AS firstSeenAt,last_seen_at AS lastSeenAt FROM customer_devices WHERE customer_id=? AND active=1 ORDER BY last_seen_at DESC'
+    ).all(req.customer.id);
+    return res.json({ devices, maxDevices: maxActiveDevices });
+  });
+
+  app.post('/api/customer/devices/activate', customerAuth, (req, res) => {
+    const deviceId = String(req.body?.deviceId || '').trim().slice(0, 120);
+    const deviceName = String(req.body?.deviceName || 'Mac').trim().slice(0, 100) || 'Mac';
+    const platform = String(req.body?.platform || 'macOS').trim().slice(0, 40) || 'macOS';
+    if (!/^[A-Za-z0-9._:-]{12,120}$/.test(deviceId)) {
+      return res.status(400).json({ error: 'El identificador del dispositivo no es válido.' });
+    }
+    const subscription = subscriptionFor(req.customer.id);
+    if (!subscription.active) return res.status(403).json({ error: 'Necesitas una licencia activa para registrar este dispositivo.' });
+    const now = new Date().toISOString();
+    const existing = db.prepare('SELECT device_id,active FROM customer_devices WHERE device_id=? AND customer_id=?').get(deviceId, req.customer.id);
+    if (!existing || existing.active !== 1) {
+      const count = db.prepare('SELECT COUNT(*) AS count FROM customer_devices WHERE customer_id=? AND active=1').get(req.customer.id).count;
+      if (count >= maxActiveDevices) {
+        return res.status(409).json({ error: `Has alcanzado el límite de ${maxActiveDevices} dispositivos. Libera uno desde tu cuenta EC Audio.` });
+      }
+    }
+    if (!existing) {
+      db.prepare('INSERT INTO customer_devices(device_id,customer_id,device_name,platform,active,first_seen_at,last_seen_at) VALUES(?,?,?,?,1,?,?)')
+        .run(deviceId, req.customer.id, deviceName, platform, now, now);
+    } else {
+      db.prepare('UPDATE customer_devices SET device_name=?,platform=?,active=1,last_seen_at=? WHERE device_id=? AND customer_id=?')
+        .run(deviceName, platform, now, deviceId, req.customer.id);
+    }
+    return res.json({ active: true, deviceId, maxDevices: maxActiveDevices });
+  });
+
+  app.delete('/api/customer/devices/:deviceId', customerAuth, (req, res) => {
+    db.prepare('UPDATE customer_devices SET active=0,last_seen_at=? WHERE device_id=? AND customer_id=?')
+      .run(new Date().toISOString(), req.params.deviceId, req.customer.id);
+    return res.json({ released: true });
   });
 }
 

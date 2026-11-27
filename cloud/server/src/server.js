@@ -11,6 +11,7 @@ const rateLimit = require('express-rate-limit');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const Stripe = require('stripe');
 const Database = require('better-sqlite3');
 const { installCustomerAccountApi } = require('./customer-accounts');
 
@@ -24,6 +25,13 @@ const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || '');
 const FIREBASE_API_KEY = String(process.env.FIREBASE_API_KEY || '');
 const FIREBASE_PROJECT_ID = String(process.env.FIREBASE_PROJECT_ID || '');
+const STRIPE_SECRET_KEY = String(process.env.STRIPE_SECRET_KEY || '');
+const STRIPE_WEBHOOK_SECRET = String(process.env.STRIPE_WEBHOOK_SECRET || '');
+const STRIPE_MONTHLY_PRICE_ID = String(process.env.STRIPE_MONTHLY_PRICE_ID || '');
+const STRIPE_ANNUAL_PRICE_ID = String(process.env.STRIPE_ANNUAL_PRICE_ID || '');
+const CUSTOMER_WEB_URL = String(process.env.CUSTOMER_WEB_URL || 'https://locutorcm.github.io/EC-Audio-Hub').replace(/\/$/, '');
+const MAX_ACTIVE_DEVICES = Math.max(1, Number(process.env.MAX_ACTIVE_DEVICES || 2));
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 const MAX_UPLOAD = Math.max(1, Number(process.env.MAX_UPLOAD_GB || 2)) * 1024 * 1024 * 1024;
 
 if (!JWT_SECRET || JWT_SECRET.length < 40) throw new Error('JWT_SECRET must contain at least 40 characters.');
@@ -71,7 +79,9 @@ const app = express();
 app.disable('x-powered-by');
 app.use(helmet());
 app.use(compression());
-app.use(express.json({ limit: '32kb' }));
+app.use(express.json({ limit: '32kb', verify: (req, _res, buffer) => {
+  if (req.originalUrl.startsWith('/api/customer/billing/webhook')) req.rawBody = Buffer.from(buffer);
+} }));
 
 const allowedOrigins = new Set(
   String(process.env.CORS_ORIGINS || 'https://locutorcm.github.io')
@@ -85,15 +95,15 @@ app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   }
   if (req.method === 'OPTIONS') return res.sendStatus(origin && allowedOrigins.has(origin) ? 204 : 403);
   return next();
 });
 
-installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret: JWT_SECRET, firebaseApiKey: FIREBASE_API_KEY, firebaseProjectId: FIREBASE_PROJECT_ID, loginLimiter: rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, standardHeaders: 'draft-7', legacyHeaders: false }) });
+installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret: JWT_SECRET, firebaseApiKey: FIREBASE_API_KEY, firebaseProjectId: FIREBASE_PROJECT_ID, stripe, stripeWebhookSecret: STRIPE_WEBHOOK_SECRET, stripeMonthlyPriceId: STRIPE_MONTHLY_PRICE_ID, stripeAnnualPriceId: STRIPE_ANNUAL_PRICE_ID, customerWebURL: CUSTOMER_WEB_URL, maxActiveDevices: MAX_ACTIVE_DEVICES, loginLimiter: rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, standardHeaders: 'draft-7', legacyHeaders: false }) });
 
-app.get('/health', (_req, res) => res.json({ ok: true, service: 'EC Audio Cloud API', customerAccounts: true, firebaseConfigured: Boolean(FIREBASE_API_KEY && FIREBASE_PROJECT_ID), demoTrialSeconds: 60 }));
+app.get('/health', (_req, res) => res.json({ ok: true, service: 'EC Audio Cloud API', customerAccounts: true, firebaseConfigured: Boolean(FIREBASE_API_KEY && FIREBASE_PROJECT_ID), stripeConfigured: Boolean(stripe && STRIPE_WEBHOOK_SECRET && STRIPE_MONTHLY_PRICE_ID && STRIPE_ANNUAL_PRICE_ID), demoTrialSeconds: 60 }));
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -129,6 +139,58 @@ function auth(req, res, next) {
     return res.status(401).json({ error: 'Session expired. Sign in again.' });
   }
 }
+
+
+ // Admin-only customer, subscription and device management endpoints.
+ app.get('/api/admin/licensing/overview', auth, (_req, res) => {
+   const totals = db.prepare("SELECT COUNT(*) AS customers, SUM(CASE WHEN s.status='active' AND s.expires_at > ? THEN 1 ELSE 0 END) AS activeSubscriptions, SUM(CASE WHEN s.status='past_due' THEN 1 ELSE 0 END) AS pastDue, SUM(CASE WHEN s.status='canceled' OR s.status='cancelled' THEN 1 ELSE 0 END) AS canceled FROM customer_accounts c LEFT JOIN customer_subscriptions s ON s.customer_id=c.id").get(new Date().toISOString());
+   const customers = db.prepare("SELECT c.id,c.email,c.display_name AS displayName,c.created_at AS createdAt,s.status,s.plan,s.started_at AS startedAt,s.expires_at AS expiresAt,s.cancel_at_period_end AS cancelAtPeriodEnd,s.billing_interval AS billingInterval,(SELECT COUNT(*) FROM customer_devices d WHERE d.customer_id=c.id AND d.active=1) AS activeDevices FROM customer_accounts c LEFT JOIN customer_subscriptions s ON s.customer_id=c.id ORDER BY c.created_at DESC LIMIT 250").all();
+   return res.json({ totals, customers });
+ });
+ app.post('/api/admin/licensing/customers/:customerId/revoke', auth, async (req, res) => {
+   const subscription = db.prepare('SELECT stripe_subscription_id FROM customer_subscriptions WHERE customer_id=?').get(req.params.customerId);
+   if (!subscription) return res.status(404).json({ error: 'No se encontró una suscripción para esa cuenta.' });
+   try {
+     if (stripe && subscription.stripe_subscription_id) {
+       await stripe.subscriptions.cancel(subscription.stripe_subscription_id);
+       const now = new Date().toISOString();
+       db.prepare("UPDATE customer_subscriptions SET status='canceled',expires_at=?,cancel_at_period_end=0,updated_at=? WHERE customer_id=?")
+         .run(now, now, req.params.customerId);
+     } else {
+       const now = new Date().toISOString();
+       db.prepare("UPDATE customer_subscriptions SET status='canceled',expires_at=?,cancel_at_period_end=0,updated_at=? WHERE customer_id=?")
+         .run(now, now, req.params.customerId);
+     }
+     return res.json({ revoked: true });
+   } catch {
+     return res.status(502).json({ error: 'No se pudo revocar la suscripción en Stripe.' });
+   }
+ });
+ app.get('/api/admin/licensing/customers/:customerId/devices', auth, (req, res) => {
+   const devices = db.prepare('SELECT device_id AS deviceId,device_name AS deviceName,platform,active,first_seen_at AS firstSeenAt,last_seen_at AS lastSeenAt FROM customer_devices WHERE customer_id=? ORDER BY last_seen_at DESC')
+     .all(req.params.customerId);
+   return res.json({ devices });
+ });
+ app.post('/api/admin/licensing/customers/:customerId/grant', auth, (req, res) => {
+   const expiresAt = String(req.body?.expiresAt || '');
+   const plan = String(req.body?.plan || 'admin');
+   const expiry = Date.parse(expiresAt);
+   if (!Number.isFinite(expiry) || expiry <= Date.now()) return res.status(400).json({ error: 'Indica una fecha de vencimiento futura en formato ISO 8601.' });
+   const customer = db.prepare('SELECT id FROM customer_accounts WHERE id=?').get(req.params.customerId);
+   if (!customer) return res.status(404).json({ error: 'No se encontró esa cuenta.' });
+   const now = new Date().toISOString();
+   const existing = db.prepare('SELECT id FROM customer_subscriptions WHERE customer_id=?').get(customer.id);
+   if (existing) {
+     db.prepare("UPDATE customer_subscriptions SET status='active',plan=?,started_at=?,expires_at=?,updated_at=?,stripe_subscription_id=NULL,cancel_at_period_end=0 WHERE customer_id=?").run(plan, now, new Date(expiry).toISOString(), now, customer.id);
+   } else {
+     db.prepare("INSERT INTO customer_subscriptions(id,customer_id,status,plan,started_at,expires_at,updated_at) VALUES(?,?,'active',?,?,?,?)").run(crypto.randomUUID(), customer.id, plan, now, new Date(expiry).toISOString(), now);
+   }
+   return res.json({ granted: true, subscription: { status: 'active', plan, expiresAt: new Date(expiry).toISOString() } });
+ });
+ app.post('/api/admin/licensing/customers/:customerId/devices/:deviceId/release', auth, (req, res) => {
+   const result = db.prepare('UPDATE customer_devices SET active=0,last_seen_at=? WHERE customer_id=? AND device_id=?').run(new Date().toISOString(), req.params.customerId, req.params.deviceId);
+   return res.json({ released: result.changes > 0 });
+ });
 
 app.post('/api/auth/login', loginLimiter, (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
