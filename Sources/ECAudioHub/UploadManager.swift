@@ -204,9 +204,10 @@ final class UploadManager: ObservableObject {
             defer { if artworkAccess { selectedArtwork?.stopAccessingSecurityScopedResource() } }
             let artworkName = selectedArtwork?.lastPathComponent
             let checksum = try sha256(of: uploadFile)
-            let slug = name.lowercased().replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+            // GitHub exige tags únicos; el UUID permite nombres y versiones repetidos
+            // y evita que caracteres especiales del nombre invaliden la publicación.
             let uniqueSuffix = UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "")
-            let tag = "\(slug)-v\(releaseVersion)-\(uniqueSuffix)"
+            let tag = "ec-audio-\(uniqueSuffix)"
             status = "Creando release en GitHub…"
             let release = try await createRelease(owner: owner, repo: repo, token: token,
                 tag: tag, title: "\(name) · v\(releaseVersion)",
