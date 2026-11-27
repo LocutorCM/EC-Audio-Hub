@@ -162,64 +162,45 @@ function money(amount, currency) {
 
 async function loadBillingPlans(user) {
   const container = $("billingActions");
+  $("annualBtn").hidden = true;
+  $("portalBtn").hidden = true;
   if (!API_BASE_URL) {
     container.hidden = false;
-    $("billingNotice").textContent = "Las suscripciones comerciales estarán disponibles cuando se publique el servidor seguro de EC Audio.";
+    $("billingNotice").textContent = "La membresía Ko-fi estará disponible cuando se publique el servidor seguro de EC Audio.";
     $("monthlyBtn").disabled = true;
-    $("annualBtn").disabled = true;
     return;
   }
   try {
     const response = await fetch(API_BASE_URL + "/api/customer/billing/plans");
-    if (!response.ok) throw new Error("No se pudieron cargar los planes.");
     const payload = await response.json();
-    const monthly = payload.plans.find(plan => plan.plan === "monthly");
-    const annual = payload.plans.find(plan => plan.plan === "annual");
-    if (monthly) $("monthlyBtn").textContent = "Plan mensual · " + money(monthly.amount, monthly.currency) + " / mes";
-    if (annual) $("annualBtn").textContent = "Plan anual · " + money(annual.amount, annual.currency) + " / año";
-    $("monthlyBtn").disabled = !monthly;
-    $("annualBtn").disabled = !annual;
-    $("billingNotice").textContent = "Pago seguro mediante Stripe. Puedes administrar o cancelar tu suscripción desde tu cuenta.";
+    if (!response.ok) throw new Error(payload.error || "No se pudo consultar la membresía.");
+    $("monthlyBtn").textContent = "Unirme a EC Audio en Ko-fi";
+    $("monthlyBtn").disabled = false;
+    $("billingNotice").textContent = "Membresía mensual segura mediante Ko-fi. La licencia se activa al confirmarse el pago.";
   } catch (error) {
-    $("billingNotice").textContent = error.message || "La facturación todavía no está disponible.";
+    $("billingNotice").textContent = error.message || "La membresía todavía no está disponible.";
     $("monthlyBtn").disabled = true;
-    $("annualBtn").disabled = true;
   }
 }
 
-async function startCheckout(plan) {
+async function startKofiMembership() {
   const user = auth.currentUser;
   if (!user || !API_BASE_URL) return;
-  const button = $(plan === "monthly" ? "monthlyBtn" : "annualBtn");
+  const button = $("monthlyBtn");
   button.disabled = true;
   try {
-    const response = await fetch(API_BASE_URL + "/api/customer/billing/checkout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + await user.getIdToken() },
-      body: JSON.stringify({ plan })
-    });
-    const payload = await response.json();
-    if (!response.ok || !payload.url) throw new Error(payload.error || "No se pudo iniciar el pago.");
-    window.location.assign(payload.url);
-  } catch (error) {
-    say(error.message || "No se pudo abrir el pago.", "error");
-    button.disabled = false;
-  }
-}
-
-async function openBillingPortal() {
-  const user = auth.currentUser;
-  if (!user || !API_BASE_URL) return;
-  try {
-    const response = await fetch(API_BASE_URL + "/api/customer/billing/portal", {
+    const response = await fetch(API_BASE_URL + "/api/customer/billing/kofi-link", {
       method: "POST",
       headers: { Authorization: "Bearer " + await user.getIdToken() }
     });
     const payload = await response.json();
-    if (!response.ok || !payload.url) throw new Error(payload.error || "No se pudo abrir la administración de pagos.");
-    window.location.assign(payload.url);
+    if (!response.ok || !payload.code || !payload.url) throw new Error(payload.error || "No se pudo preparar el enlace de Ko-fi.");
+    $("billingNotice").textContent = "IMPORTANTE: copia este código y pégalo en el mensaje de tu primera membresía en Ko-fi: " + payload.code + ". El código vence en 24 horas. Después de pagar, el servidor vinculará tu cuenta y activará la licencia.";
+    window.open(payload.url, "_blank", "noopener,noreferrer");
   } catch (error) {
-    say(error.message || "No se pudo abrir la administración de pagos.", "error");
+    say(error.message || "No se pudo abrir Ko-fi.", "error");
+  } finally {
+    button.disabled = false;
   }
 }
 
