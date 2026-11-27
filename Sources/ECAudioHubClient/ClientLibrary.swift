@@ -37,6 +37,8 @@ final class ClientLibrary: ObservableObject {
         subscriptionStatus = UserDefaults.standard.string(forKey: "ECAudioHubClient.subscriptionStatus") ?? "Sin verificar"
     }
 
+    var isLicenseEnforcementEnabled: Bool { !apiBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
     var filteredPlugins: [HubPlugin] {
         guard !searchText.isEmpty else { return plugins }
         return plugins.filter {
@@ -156,7 +158,7 @@ final class ClientLibrary: ObservableObject {
     }
 
     func downloadAndInstall(_ plugin: HubPlugin) async {
-        guard subscriptionActive, customerToken != nil else {
+        if isLicenseEnforcementEnabled && (!subscriptionActive || customerToken == nil) {
             accountMessage = "Inicia sesión y activa tu licencia antes de instalar plugins."
             return
         }
