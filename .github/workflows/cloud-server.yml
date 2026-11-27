@@ -1,0 +1,65 @@
+name: EC Audio Cloud server checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cloud/server/**'
+      - '.github/workflows/cloud-server.yml'
+  pull_request:
+    paths:
+      - 'cloud/server/**'
+      - '.github/workflows/cloud-server.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloud/server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install server dependencies
+        run: npm install --omit=dev
+      - name: Check JavaScript syntax
+        run: |
+          node --check src/server.js
+          node --check public/admin.js
+      - name: Smoke test API, auth, customer role boundary and plugin downloads
+        env:
+          JWT_SECRET: test-only-secret-that-is-long-enough-for-github-actions-123456
+          ADMIN_EMAIL: owner@example.test
+          ADMIN_PASSWORD: Test-Owner-Password-12345!
+          DATA_DIR: /tmp/ec-audio-cloud-test
+          PORT: 8187
+        run: |
+          set -euo pipefail
+          node src/server.js > /tmp/ec-audio-cloud.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8187/health >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8187/health | grep -q '"ok":true'
+          ADMIN_TOKEN=$(curl -fsS -X POST http://127.0.0.1:8187/api/auth/login -H 'Content-Type: application/json' -d '{"email":"owner@example.test","password":"Test-Owner-Password-12345!"}' | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).token')
+          test -n "$ADMIN_TOKEN"
+          curl -fsS http://127.0.0.1:8187/api/admin/users -H "Authorization: Bearer $ADMIN_TOKEN" | grep -q '"users"'
+          curl -fsS -X POST http://127.0.0.1:8187/api/admin/users -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' -d '{"email":"customer@example.test","password":"Customer-Password-123!"}' | grep -q '"customer"'
+          CUSTOMER_TOKEN=$(curl -fsS -X POST http://127.0.0.1:8187/api/auth/login -H 'Content-Type: application/json' -d '{"email":"customer@example.test","password":"Customer-Password-123!"}' | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).token')
+          STATUS=$(curl -s -o /tmp/admin-denied.json -w '%{http_code}' http://127.0.0.1:8187/api/admin/plugins -H "Authorization: Bearer $CUSTOMER_TOKEN")
+          test "$STATUS" = "403"
+          printf 'fake test installer' > /tmp/test-installer.zip
+          curl -fsS -X POST http://127.0.0.1:8187/api/admin/plugins -H "Authorization: Bearer $ADMIN_TOKEN" -F 'name=Test Plugin' -F 'manufacturer=EC Audio' -F 'version=1.0.0' -F 'category=Effects' -F 'installer=@/tmp/test-installer.zip;type=application/zip' | grep -q '"ok":true'
+          PLUGIN_ID=$(curl -fsS http://127.0.0.1:8187/api/catalog -H "Authorization: Bearer $CUSTOMER_TOKEN" | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).plugins[0].id')
+          test -n "$PLUGIN_ID"
+          curl -fsS "http://127.0.0.1:8187/api/plugins/$PLUGIN_ID/download" -H "Authorization: Bearer $CUSTOMER_TOKEN" -o /tmp/downloaded-installer.zip
+          cmp /tmp/test-installer.zip /tmp/downloaded-installer.zip
+          echo "EC Audio Cloud smoke tests passed."
