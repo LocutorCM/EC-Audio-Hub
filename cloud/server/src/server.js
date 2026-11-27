@@ -17,6 +17,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 const PORT = Number(process.env.PORT || 8080);
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, '..', 'data'));
 const FILE_DIR = path.join(DATA_DIR, 'installers');
+const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
 const DB_FILE = path.join(DATA_DIR, 'ec-audio.sqlite');
 const JWT_SECRET = process.env.JWT_SECRET;
 const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
@@ -26,6 +27,7 @@ const MAX_UPLOAD = Math.max(1, Number(process.env.MAX_UPLOAD_GB || 2)) * 1024 * 
 if (!JWT_SECRET || JWT_SECRET.length < 40) throw new Error('JWT_SECRET must be set to at least 40 characters.');
 if (!ADMIN_EMAIL || ADMIN_PASSWORD.length < 14) throw new Error('Set ADMIN_EMAIL and an ADMIN_PASSWORD of at least 14 characters.');
 fs.mkdirSync(FILE_DIR, { recursive: true, mode: 0o750 });
+fs.mkdirSync(UPLOAD_DIR, { recursive: true, mode: 0o750 });
 fs.mkdirSync(path.join(DATA_DIR, 'tmp'), { recursive: true, mode: 0o750 });
 
 const db = new Database(DB_FILE);
@@ -45,6 +47,12 @@ db.exec(`
     created_at TEXT NOT NULL, updated_at TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_plugins_published ON plugins(published, updated_at);
+  CREATE TABLE IF NOT EXISTS uploads (
+    id TEXT PRIMARY KEY, file_name TEXT NOT NULL, disk_name TEXT NOT NULL UNIQUE,
+    content_type TEXT NOT NULL, size_bytes INTEGER NOT NULL, sha256 TEXT NOT NULL,
+    uploaded_by TEXT NOT NULL, uploaded_at TEXT NOT NULL,
+    FOREIGN KEY(uploaded_by) REFERENCES users(id)
+  );
 `);
 
 const adminHash = bcrypt.hashSync(ADMIN_PASSWORD, 12);
@@ -63,7 +71,6 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-site' }, contentSecu
 } }));
 app.use(compression());
 app.use(express.json({ limit: '1mb' }));
-app.use(express.static(path.join(__dirname, '..', 'public'), { extensions: ['html'] }));
 app.get('/health', (_req, res) => res.json({ ok: true, service: 'EC Audio Cloud', version: '1.0.0' }));
 
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, standardHeaders: 'draft-7', legacyHeaders: false });
@@ -133,7 +140,7 @@ const upload = multer({
   limits: { fileSize: MAX_UPLOAD, files: 1, fields: 12 },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    const allowed = new Set(['.vst3','.component','.aaxplugin','.pkg','.dmg','.zip','.tar','.gz','.7z','.exe','.msi','.app','.au']);
+    const allowed = new Set(['.vst3','.component','.aaxplugin','.pkg','.dmg','.zip','.tar','.gz','.7z','.exe','.msi','.app','.au','.clap','.vst','.dll','.so','.rar','.deb','.rpm']);
     if (!allowed.has(ext)) return cb(new Error('Unsupported installer extension.'));
     cb(null, true);
   }
@@ -149,6 +156,33 @@ function saveUpload(req, res, next) {
     next();
   });
 }
+app.post('/api/admin/files', auth, adminOnly, saveUpload, async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Select a file to upload.' });
+  const id = crypto.randomUUID();
+  const ext = path.extname(req.file.originalname).toLowerCase();
+  const diskName = id + ext;
+  const destination = path.join(UPLOAD_DIR, diskName);
+  try {
+    fs.renameSync(req.file.path, destination);
+    const sha256 = await new Promise((resolve, reject) => {
+      const digest = crypto.createHash('sha256');
+      const stream = fs.createReadStream(destination);
+      stream.on('data', chunk => digest.update(chunk));
+      stream.on('error', reject);
+      stream.on('end', () => resolve(digest.digest('hex')));
+    });
+    const fileName = path.basename(req.file.originalname);
+    const uploadedAt = new Date().toISOString();
+    db.prepare('INSERT INTO uploads(id,file_name,disk_name,content_type,size_bytes,sha256,uploaded_by,uploaded_at) VALUES(?,?,?,?,?,?,?,?)')
+      .run(id, fileName, diskName, req.file.mimetype || 'application/octet-stream', req.file.size, sha256, req.user.id, uploadedAt);
+    return res.status(201).json({ id, fileName, sizeBytes: req.file.size, sha256, uploadedAt });
+  } catch (error) {
+    fs.rmSync(req.file.path, { force: true });
+    fs.rmSync(destination, { force: true });
+    return res.status(500).json({ error: 'The file could not be stored on the server.' });
+  }
+});
+
 app.post('/api/admin/plugins', auth, adminOnly, saveUpload, async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Select an installer file.' });
   const name = clean(req.body.name), manufacturer = clean(req.body.manufacturer), version = clean(req.body.version);
