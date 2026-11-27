@@ -282,7 +282,7 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
   const kofiPageURL = String(process.env.KOFI_PAGE_URL || 'https://ko-fi.com/ecaudio').trim();
   const kofiVerificationToken = String(process.env.KOFI_VERIFICATION_TOKEN || '');
   const kofiMonthlyTierName = String(process.env.KOFI_MONTHLY_TIER_NAME || '').trim();
-  const kofiCurrency = String(process.env.KOFI_CURRENCY || 'MXN').toUpperCase();
+  const kofiCurrency = String(process.env.KOFI_CURRENCY || 'USD').toUpperCase();
   const kofiMonthlyAmount = Number(process.env.KOFI_MONTHLY_AMOUNT || 0);
   db.exec(`
     CREATE TABLE IF NOT EXISTS kofi_webhook_events (
@@ -359,13 +359,13 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
       }
 
       const kofiEmail = String(payload?.email || '').trim().toLowerCase();
-      if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(kofiEmail)) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(kofiEmail)) {
         return res.status(400).json({ error: 'El pago no contiene un correo válido.' });
       }
       let customer = db.prepare('SELECT id FROM customer_accounts WHERE kofi_email=? COLLATE NOCASE').get(kofiEmail);
       if (!customer) {
         const message = String(payload?.message || '');
-        const match = message.match(/\\bEC-[A-F0-9]{10}\\b/i);
+        const match = message.match(/\bEC-[A-F0-9]{10}\b/i);
         if (match) {
           const tokenHash = crypto.createHash('sha256').update(match[0].toUpperCase()).digest('hex');
           const link = db.prepare('SELECT customer_id FROM kofi_link_tokens WHERE token_hash=? AND used_at IS NULL AND expires_at>?')
