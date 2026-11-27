@@ -114,7 +114,8 @@ final class CloudSyncManager: ObservableObject {
             throw CloudError.message("Usa la dirección HTTPS de tu servidor EC Audio Cloud.")
         }
         serverURL = normalized
-        guard let loginURL = endpoint("api/auth/login") else { throw CloudError.message("Dirección del servidor inválida.") }\n        var request = URLRequest(url: loginURL)
+        guard let loginURL = endpoint("api/auth/login") else { throw CloudError.message("Dirección del servidor inválida.") }
+        var request = URLRequest(url: loginURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: ["email": email, "password": password])
@@ -218,9 +219,9 @@ final class CloudSyncManager: ObservableObject {
         syncTask?.cancel()
         syncTask = Task { [weak self] in
             guard let self else { return }
+            self.connectLive()
             while !Task.isCancelled {
                 do { try await self.syncCatalog() } catch { }
-                self.connectLive()
                 try? await Task.sleep(nanoseconds: 60_000_000_000)
             }
         }
