@@ -10,7 +10,7 @@ El archivo `render.yaml` define el servicio Docker, comprobación de salud, vari
 2. En Render, crea un **Blueprint** desde ese repositorio y selecciona la rama `feature/customer-accounts-subscriptions` mientras revisas el PR.
 3. Render detectará `render.yaml`. Confirma la creación del servicio `ec-audio-cloud`.
 4. Introduce `ADMIN_EMAIL`, `ADMIN_PASSWORD` y `FIREBASE_API_KEY` cuando Render los solicite. `FIREBASE_PROJECT_ID` ya está configurado como `ec-audio-accounts`. Render genera `JWT_SECRET`.
-5. Espera a que el despliegue termine y abre `https://<servicio>.onrender.com/health`. Debe responder JSON con `ok: true`, `customerAccounts: true` y `demoTrialSeconds: 60`.
+5. Espera a que el despliegue termine y abre `https://<servicio>.onrender.com/health`. Debe responder JSON con `ok: true`, `customerAccounts: true`, `firebaseConfigured: true` y `demoTrialSeconds: 60`.
 6. Copia el dominio HTTPS generado por Render. En `docs/js/api-config.js`, asigna ese origen a `API_BASE_URL` (sin barra final), guarda el cambio y publica GitHub Pages.
 7. En EC Audio Client Hub, abre **Cuenta**, pega el mismo origen HTTPS en **Dirección del servidor** e inicia sesión con el mismo correo y contraseña de Firebase que usas en la web. El Client intercambia el ID token de Firebase por una sesión de EC Audio.
 
