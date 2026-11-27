@@ -115,7 +115,6 @@ function renderSubscription(subscription) {
       ? "Tu suscripción está programada para cancelarse al terminar el periodo actual."
       : "Tu licencia comercial está activa y sincronizada con EC Audio Client.";
     trialButton.hidden = true;
-    $("monthlyBtn").hidden = false;
     billingActions.hidden = false;
     portalButton.hidden = true;
     $("monthlyBtn").hidden = true;
@@ -123,6 +122,7 @@ function renderSubscription(subscription) {
     status.textContent = "Prueba activa · " + subscription.remainingSeconds + " segundos restantes";
     details.textContent = "Tu acceso de prueba está guardado y se comparte con EC Audio Client.";
     trialButton.hidden = false;
+    $("monthlyBtn").hidden = false;
     billingActions.hidden = false;
     portalButton.hidden = true;
   } else if (subscription.trialUsed) {
