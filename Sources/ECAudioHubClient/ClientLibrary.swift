@@ -38,6 +38,7 @@ final class ClientLibrary: ObservableObject {
     }
 
     var isLicenseEnforcementEnabled: Bool { !apiBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    var isCustomerSignedIn: Bool { customerToken != nil }
 
     var filteredPlugins: [HubPlugin] {
         guard !searchText.isEmpty else { return plugins }
@@ -520,8 +521,11 @@ final class ClientLibrary: ObservableObject {
     func signOutCustomer() {
         customerToken = nil
         accountEmail = ""
+        subscriptionActive = false
+        subscriptionStatus = "Sesión cerrada"
         UserDefaults.standard.removeObject(forKey: "ECAudioHubClient.accountEmail")
-        accountMessage = "Sesión cerrada. Los plugins administrados permanecen en su estado actual hasta una verificación válida."
+        UserDefaults.standard.set(subscriptionStatus, forKey: "ECAudioHubClient.subscriptionStatus")
+        accountMessage = "Sesión cerrada. Los plugins instalados permanecen en su estado actual."
     }
 
     private func pluginInstallRoot() -> URL {
