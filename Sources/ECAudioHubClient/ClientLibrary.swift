@@ -49,6 +49,7 @@ final class ClientLibrary: ObservableObject {
             var request = URLRequest(url: URL(string: "https://api.github.com/repos/\(owner)/\(repository)/releases?per_page=100")!)
             request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
             request.setValue("EC-Audio-Hub-Client", forHTTPHeaderField: "User-Agent")
+            request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
             request.timeoutInterval = 30
 
             let (data, response) = try await URLSession.shared.data(for: request)
@@ -79,7 +80,7 @@ final class ClientLibrary: ObservableObject {
                     downloadURL: asset.browserDownloadURL,
                     size: asset.size,
                     releaseNotes: release.body ?? "",
-                    imageURL: metadata["image_file"].flatMap { imageName in release.assets.first(where: { $0.name == imageName })?.browserDownloadURL }
+                    imageURL: metadata["image_url"].flatMap(URL.init(string:)) ?? metadata["image_file"].flatMap { imageName in release.assets.first(where: { $0.name == imageName })?.browserDownloadURL }
                 ))
             }
 
