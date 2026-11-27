@@ -11,7 +11,7 @@ import {
   updateProfile
 } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { getFirestore, doc, getDoc, runTransaction, Timestamp, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -68,7 +68,8 @@ async function readSubscription(user) {
     return { status: "inactive", active: false, plan: null, expiresAt: null, remainingSeconds: 0, trialUsed: false };
   }
   const data = snapshot.data();
-  const expiresAt = data.expiresAt?.toDate?.() || null;
+  const startedAt = data.startedAt?.toDate?.() || null;
+  const expiresAt = startedAt ? new Date(startedAt.getTime() + 60 * 1000) : null;
   const active = data.status === "active" && expiresAt instanceof Date && expiresAt.getTime() > Date.now();
   return {
     status: data.status === "active" && !active ? "expired" : (data.status || "inactive"),
@@ -135,7 +136,6 @@ $("trialBtn").addEventListener("click", async () => {
         status: "active",
         plan: "trial",
         startedAt: serverTimestamp(),
-        expiresAt: Timestamp.fromMillis(Date.now() + 60 * 1000),
         trialUsed: true
       });
     });
