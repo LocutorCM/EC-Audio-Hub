@@ -260,11 +260,24 @@ final class UploadManager: ObservableObject {
         ])
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, (200...201).contains(http.statusCode) else {
-            let detail = (try? JSONDecoder().decode(GitHubError.self, from: data).message) ?? "HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)"
-            if detail.lowercased().contains("already_exists") || detail.lowercased().contains("already_exists") {
-                throw UploadError.message("Ya existe la versión \(tag). Cambia el número de versión para publicar otra actualización.")
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let apiError = try? JSONDecoder().decode(GitHubError.self, from: data)
+            let apiMessage = apiError?.message ?? String(data: data, encoding: .utf8) ?? "Respuesta vacía de GitHub"
+            let issueDetails = (apiError?.errors ?? []).map { issue in
+                [issue.resource, issue.field, issue.code, issue.message].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " / ")
+            }.filter { !$0.isEmpty }.joined(separator: "; ")
+            let detail = issueDetails.isEmpty ? apiMessage : apiMessage + " — " + issueDetails
+
+            if statusCode == 422 && (apiError?.errors ?? []).contains(where: { $0.code == "already_exists" }) {
+                throw UploadError.message("Ya existe la versión \(tag). Cambia el número de versión y vuelve a publicar.")
             }
-            throw UploadError.message("No se pudo crear el release: \(detail). Revisa el permiso Contents: Read and write del token.")
+            if statusCode == 403 || statusCode == 404 {
+                throw UploadError.message("GitHub rechazó la creación del release (HTTP \(statusCode)): \(detail). Comprueba que el token tenga acceso al repositorio y permiso Contents: Read and write.")
+            }
+            if statusCode == 422 {
+                throw UploadError.message("GitHub rechazó los datos del release (HTTP 422): \(detail). Revisa el nombre del plugin, la versión y la etiqueta \(tag).")
+            }
+            throw UploadError.message("No se pudo crear el release (HTTP \(statusCode)): \(detail)")
         }
         return try JSONDecoder().decode(GitHubRelease.self, from: data)
     }
@@ -329,7 +342,16 @@ private struct UploadedAsset: Decodable {
     let browserDownloadURL: URL
     enum CodingKeys: String, CodingKey { case browserDownloadURL = "browser_download_url" }
 }
-private struct GitHubError: Decodable { let message: String? }
+private struct GitHubError: Decodable {
+    let message: String?
+    let errors: [GitHubValidationIssue]?
+}
+private struct GitHubValidationIssue: Decodable {
+    let resource: String?
+    let field: String?
+    let code: String?
+    let message: String?
+}
 private enum UploadError: LocalizedError {
     case message(String)
     var errorDescription: String? { if case .message(let value) = self { return value }; return nil }
