@@ -92,7 +92,14 @@ final class UploadManager: ObservableObject {
             guard let http = response as? HTTPURLResponse, http.statusCode == 204 else {
                 throw UploadError.message("GitHub no pudo eliminar esta publicación.")
             }
-            status = "Publicación eliminada."
+            // Remove the associated tag too, so the same plugin version can be published again.
+            var tagRequest = URLRequest(url: URL(string: "\(api)/repos/\(repositoryOwner)/\(repositoryName)/git/refs/tags/\(release.tagName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? release.tagName)")!)
+            tagRequest.httpMethod = "DELETE"
+            tagRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            tagRequest.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+            tagRequest.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+            _ = try? await session.data(for: tagRequest)
+            status = "Publicación y etiqueta eliminadas."
             await refreshReleases()
         } catch { errorMessage = error.localizedDescription }
     }
