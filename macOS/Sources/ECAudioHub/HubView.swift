@@ -47,14 +47,14 @@ struct HubView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("BIBLIOTECA").font(.system(size: 10, weight: .bold)).tracking(1.8)
                     .foregroundColor(.secondary).padding(.horizontal, 10)
-                ForEach(sections, id: \\.self) { section in
+                ForEach(sections, id: \.self) { section in
                     Button { selectedSection = section } label: {
                         HStack(spacing: 10) {
                             Image(systemName: icon(for: section)).frame(width: 17)
                             Text(section)
                             Spacer()
                             if section == "Todos" {
-                                Text("\\(library.plugins.count)")
+                                Text("\(library.plugins.count)")
                                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
                                     .foregroundColor(.secondary)
                             }
@@ -211,7 +211,7 @@ private struct PluginCard: View {
 }
 
 private struct AddPluginView: View {
-    @Environment(\\.dismiss) private var dismiss
+    @Environment(\.dismiss) private var dismiss
     var onSave: (AudioPlugin) -> Void
     @State private var name = ""
     @State private var manufacturer = ""
@@ -245,13 +245,13 @@ private struct AddPluginView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     label("FORMATO")
                     Picker("Formato", selection: $format) {
-                        ForEach(formats, id: \\.self) { Text($0).tag($0) }
+                        ForEach(formats, id: \.self) { Text($0).tag($0) }
                     }.labelsHidden()
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     label("CATEGORÍA")
                     Picker("Categoría", selection: $category) {
-                        ForEach(categories, id: \\.self) { Text($0).tag($0) }
+                        ForEach(categories, id: \.self) { Text($0).tag($0) }
                     }.labelsHidden()
                 }
             }
