@@ -1,26 +1,36 @@
-# EC Audio Accounts — configuración actual
+# EC Audio Accounts — configuración Firebase compartida
 
-La página de cuenta `docs/account.html` y la aplicación macOS Client Hub utilizan el mismo API Express del repositorio.
+El proyecto Firebase EC Audio Accounts (`ec-audio-accounts`) es la identidad central del sitio y del Client Hub de macOS. Ambos inician sesión con Firebase Authentication; el API EC Audio valida el ID token y entrega una sesión propia para consultar licencias.
 
 ## Configuración
 
-1. Publica el servidor siguiendo [cloud/DEPLOY_RENDER.md](../cloud/DEPLOY_RENDER.md) o la guía de [cloud/server/CUSTOMER-ACCOUNTS.md](../cloud/server/CUSTOMER-ACCOUNTS.md).
-2. Copia el origen HTTPS del servidor.
-3. Sustituye el valor vacío de `API_BASE_URL` en `docs/js/api-config.js` por el origen HTTPS, sin barra final.
-4. Publica GitHub Pages.
-5. En macOS Client Hub, abre **Cuenta** y pega el mismo origen HTTPS.
-6. Registra una cuenta con correo y contraseña en la web o en el Client Hub. Las credenciales son las mismas en ambos.
+1. Configura `FIREBASE_API_KEY` en el servidor con el valor `apiKey` de `docs/js/firebase-config.js`.
+2. Configura `FIREBASE_PROJECT_ID=ec-audio-accounts`.
+3. Publica el backend siguiendo `cloud/DEPLOY_RENDER.md`.
+4. Copia el origen HTTPS del backend en `docs/js/api-config.js`, en `API_BASE_URL`, sin barra final.
+5. Publica GitHub Pages.
+6. En EC Audio Client Hub, abre Cuenta y pega el mismo origen HTTPS en Dirección del servidor.
 
-## Funciones actuales
+## Proveedores de Firebase
 
-- Registro e inicio de sesión con correo y contraseña.
-- Contraseñas almacenadas mediante bcrypt en el servidor.
-- Token de cliente independiente del token de administrador.
-- Prueba gratuita de $0 MXN durante 60 segundos, sin tarjeta ni cobro.
-- El token de escritorio se guarda en macOS Keychain.
-- El Client Hub consulta el estado de licencia cada 30 segundos. Solo una respuesta válida del servidor que confirme el vencimiento suspende los plugins EC Audio administrados. Los errores de red no los desactivan.
-- Los plugins suspendidos se mueven a una carpeta local de resguardo y se restauran cuando el servidor confirma una suscripción activa.
+En Firebase Console > Authentication > Sign-in method, habilita Email/Password y Google. En Authentication > Settings > Authorized domains, agrega `locutorcm.github.io`.
 
-## Proveedores sociales y pagos
+Si aparece `auth/operation-not-allowed`, el proveedor usado en ese intento todavía no está habilitado en Firebase. No es un error del código de la página.
 
-Google, Apple y otros proveedores sociales no están habilitados en esta versión del API. Para activarlos hay que configurar credenciales OAuth del proyecto y añadir la verificación de identidad del lado del servidor. La activación actual es una demostración gratuita; no procesa pagos. Antes de vender suscripciones, integrar un proveedor de pagos y aceptar solo notificaciones verificadas del servidor.
+## Cómo se comparte la cuenta
+
+- La web y el Client Hub autentican con el mismo proyecto Firebase.
+- El Client Hub usa Firebase Authentication REST para correo y contraseña; no guarda la contraseña.
+- Ambos intercambian el Firebase ID token con `POST /api/customer/auth/firebase`.
+- El backend valida el token con Firebase Identity Toolkit, vincula el UID a una sola cuenta EC Audio y emite un token EC Audio independiente.
+- El Client Hub guarda únicamente el token EC Audio en el Llavero de macOS.
+
+## Licencias
+
+La prueba actual es $0 MXN, dura 60 segundos y no cobra ni requiere tarjeta. Es solo para pruebas. El servidor controla el vencimiento; al confirmarse, Client Hub resguarda los plugins administrados por EC Audio sin borrarlos.
+
+## Límites actuales
+
+El inicio de sesión nativo del Client Hub está conectado primero con correo y contraseña Firebase. Google nativo requiere añadir el OAuth Client ID de macOS del proyecto; el botón Google del sitio web utiliza Firebase popup. Los pagos comerciales todavía no están implementados.
+
+El API debe publicarse con HTTPS antes de que la sincronización de licencias y la activación de prueba funcionen de extremo a extremo.
