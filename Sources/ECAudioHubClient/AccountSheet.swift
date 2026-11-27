@@ -71,6 +71,20 @@ struct AccountSheet: View {
                 .disabled(library.isAccountBusy || email.trimmingCharacters(in: .whitespaces).isEmpty || password.count < 10)
             }
 
+            if library.accountEmail.isEmpty {
+                Button {
+                    if let url = URL(string: "https://locutorcm.github.io/EC-Audio-Hub/account.html?client=1") {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    Label("Continuar en navegador · Google y más opciones", systemImage: "globe")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(BlueButtonStyle())
+                Text("Se abrirá la misma página segura de EC Audio. Al terminar, volverás automáticamente a Client Hub.")
+                    .font(.system(size: 10)).foregroundColor(.secondary)
+            }
+
             Divider().overlay(Color.white.opacity(0.12))
             VStack(alignment: .leading, spacing: 7) {
                 Text("DIRECCIÓN DEL SERVIDOR")
