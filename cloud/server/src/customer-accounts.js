@@ -2,7 +2,7 @@
 
 const crypto = require('node:crypto');
 
-function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimiter, firebaseApiKey, firebaseProjectId }) {
+function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimiter, firebaseApiKey, firebaseProjectId, firebaseTokenVerifier }) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS customer_accounts (
       id TEXT PRIMARY KEY,
@@ -31,6 +31,7 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_accounts_firebase_uid ON customer_accounts(firebase_uid) WHERE firebase_uid IS NOT NULL');
 
   async function verifyFirebaseIdToken(idToken) {
+    if (firebaseTokenVerifier) return firebaseTokenVerifier(idToken);
     if (!firebaseApiKey || !firebaseProjectId) { const error = new Error('La conexión con Firebase no está configurada en el servidor.'); error.status = 503; throw error; }
     const response = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + encodeURIComponent(firebaseApiKey), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken }), signal: AbortSignal.timeout(10000)
