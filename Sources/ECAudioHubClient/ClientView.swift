@@ -1,5 +1,50 @@
 import SwiftUI
 
+private struct PluginArtworkView: View {
+    let url: URL?
+    @State private var artwork: NSImage?
+    @State private var failed = false
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(LinearGradient(colors: [Color(hex: 0x285E9C), Color(hex: 0x193453)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            if let artwork {
+                Image(nsImage: artwork)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image(systemName: "waveform.path")
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundColor(Color(hex: 0xB7E5FF))
+            }
+        }
+        .frame(width: 64, height: 64)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .task(id: url) {
+            artwork = nil
+            failed = false
+            guard let url else { return }
+            do {
+                var request = URLRequest(url: url)
+                request.setValue("image/avif,image/webp,image/apng,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
+                request.setValue("EC-Audio-Hub-Client", forHTTPHeaderField: "User-Agent")
+                request.timeoutInterval = 30
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse,
+                      (200...299).contains(http.statusCode),
+                      let decoded = NSImage(data: data) else {
+                    failed = true
+                    return
+                }
+                artwork = decoded
+            } catch {
+                failed = true
+            }
+        }
+    }
+}
+
 struct ClientView: View {
     @EnvironmentObject private var library: ClientLibrary
     @Environment(\.scenePhase) private var scenePhase
@@ -215,22 +260,7 @@ struct ClientView: View {
         let isBusy = library.downloadingIDs.contains(plugin.id)
 
         return HStack(spacing: 15) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12).fill(LinearGradient(colors: [Color(hex: 0x285E9C), Color(hex: 0x193453)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                if let imageURL = plugin.imageURL {
-                    AsyncImage(url: imageURL) { phase in
-                        if let image = phase.image {
-                            image.resizable().scaledToFill()
-                        } else {
-                            Image(systemName: "waveform.path").font(.system(size: 22, weight: .medium)).foregroundColor(Color(hex: 0xB7E5FF))
-                        }
-                    }
-                } else {
-                    Image(systemName: "waveform.path").font(.system(size: 22, weight: .medium)).foregroundColor(Color(hex: 0xB7E5FF))
-                }
-            }
-            .frame(width: 54, height: 54)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            PluginArtworkView(url: plugin.imageURL)
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 8) {
                     Text(plugin.name).font(.system(size: 14, weight: .bold)).foregroundColor(.white)
