@@ -129,12 +129,8 @@ final class UploadManager: ObservableObject {
             errorMessage = "Inicia sesión como administrador para subir archivos."
             return
         }
-        guard file.startAccessingSecurityScopedResource() else {
-            // Files selected through NSOpenPanel are also accessible in many local locations.
-            // Continue and let FileManager report a real access error if the URL is unavailable.
-            breakUploadScope()
-        }
-        defer { file.stopAccessingSecurityScopedResource() }
+        let didStartAccess = file.startAccessingSecurityScopedResource()
+        defer { if didStartAccess { file.stopAccessingSecurityScopedResource() } }
 
         isUploading = true
         errorMessage = nil
@@ -183,8 +179,6 @@ final class UploadManager: ObservableObject {
             status = "No se pudo completar la subida."
         }
     }
-
-    private func breakUploadScope() { }
 
     private func endpoint(_ path: String, base: String? = nil) -> URL? {
         let value = base ?? serverURL
