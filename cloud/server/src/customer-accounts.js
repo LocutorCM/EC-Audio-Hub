@@ -288,14 +288,21 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
         stripe.prices.retrieve(stripeMonthlyPriceId),
         stripe.prices.retrieve(stripeAnnualPriceId)
       ]);
-      const format = (price, plan) => ({
-        plan,
-        priceId: price.id,
-        amount: price.unit_amount,
-        currency: String(price.currency || 'mxn').toUpperCase(),
-        interval: price.recurring?.interval || (plan === 'annual' ? 'year' : 'month'),
-        intervalCount: price.recurring?.interval_count || 1
-      });
+      const format = (price, plan) => {
+        const expectedInterval = plan === 'annual' ? 'year' : 'month';
+        if (!price.active || price.currency !== 'mxn' || price.unit_amount == null ||
+            price.unit_amount <= 0 || price.recurring?.interval !== expectedInterval) {
+          throw new Error('El precio de Stripe para ' + plan + ' debe estar activo, ser recurrente en MXN y tener el intervalo correcto.');
+        }
+        return {
+          plan,
+          priceId: price.id,
+          amount: price.unit_amount,
+          currency: String(price.currency).toUpperCase(),
+          interval: price.recurring.interval,
+          intervalCount: price.recurring.interval_count || 1
+        };
+      };
       return res.json({ plans: [format(monthly, 'monthly'), format(annual, 'annual')] });
     } catch (error) {
       return res.status(502).json({ error: 'No se pudieron consultar los planes de Stripe.' });
@@ -310,6 +317,13 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
     const price = plan === 'monthly' ? stripeMonthlyPriceId : plan === 'annual' ? stripeAnnualPriceId : null;
     if (!price) return res.status(400).json({ error: 'Selecciona un plan mensual o anual válido.' });
     try {
+      const selectedPrice = await stripe.prices.retrieve(price);
+      const expectedInterval = plan === 'annual' ? 'year' : 'month';
+      if (!selectedPrice.active || selectedPrice.currency !== 'mxn' ||
+          selectedPrice.unit_amount == null || selectedPrice.unit_amount <= 0 ||
+          selectedPrice.recurring?.interval !== expectedInterval) {
+        return res.status(400).json({ error: 'El precio configurado no es un plan recurrente válido en MXN.' });
+      }
       let stripeCustomerId = req.customer.stripe_customer_id;
       if (!stripeCustomerId) {
         const customer = await stripe.customers.create({
