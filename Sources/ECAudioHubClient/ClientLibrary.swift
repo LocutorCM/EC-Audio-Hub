@@ -435,7 +435,7 @@ final class ClientLibrary: ObservableObject {
         }
 
         guard let refresh = customerRefreshToken else { return token }
-        guard let url = URL(string: "https://securetoken.googleapis.com/v1/token?key=\\(firebaseAPIKey)") else {
+        guard let url = URL(string: "https://securetoken.googleapis.com/v1/token?key=\(firebaseAPIKey)") else {
             throw ClientAccountError.server("No se pudo preparar la renovación segura de Firebase.")
         }
         var request = URLRequest(url: url)
@@ -465,7 +465,7 @@ final class ClientLibrary: ObservableObject {
         method: String = "GET",
         body: Data? = nil
     ) async throws -> (Data, Int) {
-        let base = "https://firestore.googleapis.com/v1/projects/\\(firebaseProjectID)/databases/(default)/documents"
+        let base = "https://firestore.googleapis.com/v1/projects/\(firebaseProjectID)/databases/(default)/documents"
         guard let url = URL(string: base + path) else { throw ClientAccountError.apiNotConfigured }
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -491,7 +491,7 @@ final class ClientLibrary: ObservableObject {
         guard let uid = UserDefaults.standard.string(forKey: firebaseUIDKey), !uid.isEmpty else {
             throw ClientAccountError.server("No se encontró el identificador de tu cuenta Firebase. Inicia sesión nuevamente.")
         }
-        let (data, status) = try await firestoreRequest("/ecAudioSubscriptions/\\(uid)")
+        let (data, status) = try await firestoreRequest("/ecAudioSubscriptions/\(uid)")
         if status == 404 {
             return CustomerSubscriptionDTO(
                 status: "inactive", plan: nil, active: false, expiresAt: nil,
@@ -499,7 +499,7 @@ final class ClientLibrary: ObservableObject {
             )
         }
         guard (200...299).contains(status) else {
-            throw ClientAccountError.server(firestoreError(data, fallback: "No se pudo consultar la licencia Firebase (HTTP \\(status))."))
+            throw ClientAccountError.server(firestoreError(data, fallback: "No se pudo consultar la licencia Firebase (HTTP \(status))."))
         }
         guard let document = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let fields = document["fields"] as? [String: Any] else {
@@ -535,7 +535,7 @@ final class ClientLibrary: ObservableObject {
         defer { isAccountBusy = false }
         do {
             let action = register ? "signUp" : "signInWithPassword"
-            guard let firebaseURL = URL(string: "https://identitytoolkit.googleapis.com/v1/accounts:\\(action)?key=\\(firebaseAPIKey)") else {
+            guard let firebaseURL = URL(string: "https://identitytoolkit.googleapis.com/v1/accounts:\(action)?key=\(firebaseAPIKey)") else {
                 throw ClientAccountError.server("No se pudo preparar la conexión con Firebase.")
             }
             var firebaseRequest = URLRequest(url: firebaseURL)
@@ -610,7 +610,7 @@ final class ClientLibrary: ObservableObject {
         isAccountBusy = true
         defer { isAccountBusy = false }
         do {
-            let documentName = "projects/\\(firebaseProjectID)/databases/(default)/documents/ecAudioSubscriptions/\\(uid)"
+            let documentName = "projects/\(firebaseProjectID)/databases/(default)/documents/ecAudioSubscriptions/\(uid)"
             let bodyObject: [String: Any] = [
                 "writes": [[
                     "update": [
@@ -634,7 +634,7 @@ final class ClientLibrary: ObservableObject {
             let body = try JSONSerialization.data(withJSONObject: bodyObject)
             let (data, status) = try await firestoreRequest("/documents:commit", method: "POST", body: body)
             guard (200...299).contains(status) else {
-                let message = firestoreError(data, fallback: "No se pudo activar la prueba gratuita (HTTP \\(status)).")
+                let message = firestoreError(data, fallback: "No se pudo activar la prueba gratuita (HTTP \(status)).")
                 if status == 409 || message.localizedCaseInsensitiveContains("already exists") {
                     throw ClientAccountError.server("La prueba gratuita de esta cuenta ya fue utilizada.")
                 }
@@ -655,22 +655,22 @@ final class ClientLibrary: ObservableObject {
             applySubscription(subscription)
         } catch {
             // Un fallo de red o servidor no demuestra que la licencia haya vencido.
-            accountMessage = "No se pudo verificar la licencia Firebase. Se conserva el estado actual: \\(error.localizedDescription)"
+            accountMessage = "No se pudo verificar la licencia Firebase. Se conserva el estado actual: \(error.localizedDescription)"
         }
     }
 
     private func applySubscription(_ subscription: CustomerSubscriptionDTO) {
         subscriptionActive = subscription.active
-        let expiry = subscription.remainingSeconds.map { " · \\($0) s restantes" } ?? ""
+        let expiry = subscription.remainingSeconds.map { " · \($0) s restantes" } ?? ""
         subscriptionStatus = subscription.active ? "Acceso activo" + expiry :
             (subscription.status == "expired" ? "Prueba vencida" : "Sin acceso activo")
         UserDefaults.standard.set(subscriptionStatus, forKey: "ECAudioHubClient.subscriptionStatus")
         if subscription.active {
             do { try restoreManagedPlugins() }
-            catch { accountMessage = "Acceso restaurado, pero algunos plugins requieren restauración manual: \\(error.localizedDescription)" }
+            catch { accountMessage = "Acceso restaurado, pero algunos plugins requieren restauración manual: \(error.localizedDescription)" }
         } else {
             do { try suspendManagedPlugins() }
-            catch { accountMessage = "La licencia venció, pero no se pudieron suspender todos los plugins: \\(error.localizedDescription)" }
+            catch { accountMessage = "La licencia venció, pero no se pudieron suspender todos los plugins: \(error.localizedDescription)" }
         }
     }
 
