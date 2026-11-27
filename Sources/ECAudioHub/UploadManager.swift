@@ -214,7 +214,9 @@ final class UploadManager: ObservableObject {
                 throw UploadError.message("No se pudo subir el asset: \(detail)")
             }
             if let artwork = selectedArtwork, let artworkName {
-                try await uploadAsset(artwork, named: artworkName, uploadTemplate: uploadTemplate, token: token)
+                let imageURL = try await uploadAsset(artwork, named: artworkName, uploadTemplate: uploadTemplate, token: token)
+                let body = "EC_AUDIO_PLUGIN_RELEASE\nplugin_name: \(name)\nversion: \(releaseVersion)\nfile_name: \(fileName)\nsha256: \(checksum)\nimage_file: \(artworkName)\nimage_url: \(imageURL.absoluteString)"
+                try await updateReleaseBody(releaseID: release.id, owner: owner, repo: repo, token: token, body: body)
             }
             lastUploaded = "\(name) v\(releaseVersion)"
             status = "Publicado correctamente en GitHub Releases."
@@ -251,7 +253,7 @@ final class UploadManager: ObservableObject {
     }
 
 
-    private func uploadAsset(_ file: URL, named name: String, uploadTemplate: String, token: String) async throws {
+    private func uploadAsset(_ file: URL, named name: String, uploadTemplate: String, token: String) async throws -> URL {
         let template = uploadTemplate.replacingOccurrences(of: "{?name,label}", with: "")
         guard let base = URL(string: template), var components = URLComponents(url: base, resolvingAgainstBaseURL: false) else {
             throw UploadError.message("URL de imagen inválida.")
@@ -270,6 +272,21 @@ final class UploadManager: ObservableObject {
             let detail = (try? JSONDecoder().decode(GitHubError.self, from: data).message) ?? "Error HTTP"
             throw UploadError.message("No se pudo subir la imagen: \(detail)")
         }
+        return try JSONDecoder().decode(UploadedAsset.self, from: data).browserDownloadURL
+    }
+
+    private func updateReleaseBody(releaseID: Int, owner: String, repo: String, token: String, body: String) async throws {
+        var request = URLRequest(url: URL(string: "\(api)/repos/\(owner)/\(repo)/releases/\(releaseID)")!)
+        request.httpMethod = "PATCH"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["body": body])
+        let (_, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw UploadError.message("La imagen se subió, pero no se pudo guardar su referencia en el catálogo.")
+        }
     }
 
     private func sha256(of url: URL) throws -> String {
@@ -287,8 +304,13 @@ final class UploadManager: ObservableObject {
 
 private struct GitHubUser: Decodable { let login: String }
 private struct GitHubRelease: Decodable {
+    let id: Int
     let uploadURL: String?
-    enum CodingKeys: String, CodingKey { case uploadURL = "upload_url" }
+    enum CodingKeys: String, CodingKey { case id; case uploadURL = "upload_url" }
+}
+private struct UploadedAsset: Decodable {
+    let browserDownloadURL: URL
+    enum CodingKeys: String, CodingKey { case browserDownloadURL = "browser_download_url" }
 }
 private struct GitHubError: Decodable { let message: String? }
 private enum UploadError: LocalizedError {
