@@ -278,180 +278,131 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
     });
   });
 
-  // Stripe catalog is read-only; secret keys and price IDs stay on the server.
-  app.get('/api/customer/billing/plans', async (_req, res) => {
-    if (!stripe || !stripeMonthlyPriceId || !stripeAnnualPriceId) {
-      return res.status(503).json({ error: 'La facturación todavía no está configurada.' });
+  // Ko-fi membership payments are activated only from verified webhook events.
+  const kofiPageURL = String(process.env.KOFI_PAGE_URL || 'https://ko-fi.com/ecaudio').trim();
+  const kofiVerificationToken = String(process.env.KOFI_VERIFICATION_TOKEN || '');
+  const kofiMonthlyTierName = String(process.env.KOFI_MONTHLY_TIER_NAME || '').trim();
+  const kofiCurrency = String(process.env.KOFI_CURRENCY || 'MXN').toUpperCase();
+  const kofiMonthlyAmount = Number(process.env.KOFI_MONTHLY_AMOUNT || 0);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS kofi_webhook_events (
+      id TEXT PRIMARY KEY,
+      processed_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS kofi_link_tokens (
+      token_hash TEXT PRIMARY KEY,
+      customer_id TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY(customer_id) REFERENCES customer_accounts(id) ON DELETE CASCADE
+    );
+  `);
+  const accountColumns = db.prepare('PRAGMA table_info(customer_accounts)').all().map(column => column.name);
+  if (!accountColumns.includes('kofi_email')) db.exec('ALTER TABLE customer_accounts ADD COLUMN kofi_email TEXT');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_customer_accounts_kofi_email ON customer_accounts(kofi_email)');
+
+  app.get('/api/customer/billing/plans', (_req, res) => {
+    if (!kofiVerificationToken || !kofiMonthlyTierName) {
+      return res.status(503).json({ error: 'Los pagos de Ko-fi todavía no están configurados.' });
     }
-    try {
-      const [monthly, annual] = await Promise.all([
-        stripe.prices.retrieve(stripeMonthlyPriceId),
-        stripe.prices.retrieve(stripeAnnualPriceId)
-      ]);
-      const format = (price, plan) => {
-        const expectedInterval = plan === 'annual' ? 'year' : 'month';
-        if (!price.active || price.currency !== 'mxn' || price.unit_amount == null ||
-            price.unit_amount <= 0 || price.recurring?.interval !== expectedInterval) {
-          throw new Error('El precio de Stripe para ' + plan + ' debe estar activo, ser recurrente en MXN y tener el intervalo correcto.');
-        }
-        return {
-          plan,
-          priceId: price.id,
-          amount: price.unit_amount,
-          currency: String(price.currency).toUpperCase(),
-          interval: price.recurring.interval,
-          intervalCount: price.recurring.interval_count || 1
-        };
-      };
-      return res.json({ plans: [format(monthly, 'monthly'), format(annual, 'annual')] });
-    } catch (error) {
-      return res.status(502).json({ error: 'No se pudieron consultar los planes de Stripe.' });
-    }
+    return res.json({ provider: 'kofi', plans: [{ plan: 'monthly', tierName: kofiMonthlyTierName, currency: kofiCurrency, interval: 'month' }] });
   });
 
-  app.post('/api/customer/billing/checkout', customerAuth, async (req, res) => {
-    if (!stripe || !stripeMonthlyPriceId || !stripeAnnualPriceId) {
-      return res.status(503).json({ error: 'La facturación todavía no está configurada.' });
+  app.post('/api/customer/billing/kofi-link', customerAuth, (req, res) => {
+    if (!kofiVerificationToken || !kofiMonthlyTierName) {
+      return res.status(503).json({ error: 'Los pagos de Ko-fi todavía no están configurados.' });
     }
-    const plan = String(req.body?.plan || '');
-    const price = plan === 'monthly' ? stripeMonthlyPriceId : plan === 'annual' ? stripeAnnualPriceId : null;
-    if (!price) return res.status(400).json({ error: 'Selecciona un plan mensual o anual válido.' });
-    const currentSubscription = subscriptionFor(req.customer.id);
-    if (currentSubscription.active && currentSubscription.plan !== 'trial') {
-      return res.status(409).json({ error: 'Ya tienes una suscripción comercial activa. Adminístrala desde el portal de facturación.' });
+    const current = subscriptionFor(req.customer.id);
+    if (current.active && current.plan !== 'trial') {
+      return res.status(409).json({ error: 'Tu licencia comercial ya está activa.' });
     }
-    try {
-      const selectedPrice = await stripe.prices.retrieve(price);
-      const expectedInterval = plan === 'annual' ? 'year' : 'month';
-      if (!selectedPrice.active || selectedPrice.currency !== 'mxn' ||
-          selectedPrice.unit_amount == null || selectedPrice.unit_amount <= 0 ||
-          selectedPrice.recurring?.interval !== expectedInterval) {
-        return res.status(400).json({ error: 'El precio configurado no es un plan recurrente válido en MXN.' });
-      }
-      let stripeCustomerId = req.customer.stripe_customer_id;
-      if (!stripeCustomerId) {
-        const customer = await stripe.customers.create({
-          email: req.customer.email,
-          name: req.customer.display_name || undefined,
-          metadata: { ecAudioCustomerId: req.customer.id }
-        });
-        stripeCustomerId = customer.id;
-        db.prepare('UPDATE customer_accounts SET stripe_customer_id=? WHERE id=?').run(stripeCustomerId, req.customer.id);
-      }
-      const session = await stripe.checkout.sessions.create({
-        mode: 'subscription',
-        customer: stripeCustomerId,
-        client_reference_id: req.customer.id,
-        line_items: [{ price, quantity: 1 }],
-        allow_promotion_codes: true,
-        billing_address_collection: 'required',
-        locale: 'es',
-        metadata: { ecAudioCustomerId: req.customer.id, ecAudioPlan: plan },
-        subscription_data: { metadata: { ecAudioCustomerId: req.customer.id, ecAudioPlan: plan } },
-        success_url: `${customerWebURL}/account.html?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${customerWebURL}/account.html?checkout=cancelled`
-      });
-      return res.json({ url: session.url });
-    } catch (error) {
-      return res.status(502).json({ error: 'No se pudo iniciar el pago. Inténtalo nuevamente.' });
-    }
+    const rawCode = 'EC-' + crypto.randomBytes(5).toString('hex').toUpperCase();
+    const tokenHash = crypto.createHash('sha256').update(rawCode).digest('hex');
+    const now = new Date();
+    db.prepare('DELETE FROM kofi_link_tokens WHERE expires_at < ? OR used_at IS NOT NULL').run(now.toISOString());
+    db.prepare('INSERT INTO kofi_link_tokens(token_hash,customer_id,expires_at,created_at) VALUES(?,?,?,?)')
+      .run(tokenHash, req.customer.id, new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(), now.toISOString());
+    return res.json({ code: rawCode, url: kofiPageURL, instructions: 'Pega este código en el mensaje de tu pago o primera membresía de Ko-fi.' });
   });
 
-  app.post('/api/customer/billing/portal', customerAuth, async (req, res) => {
-    if (!stripe || !req.customer.stripe_customer_id) {
-      return res.status(400).json({ error: 'Esta cuenta todavía no tiene una suscripción de Stripe.' });
-    }
+  app.post('/api/webhooks/kofi', (req, res) => {
+    if (!kofiVerificationToken) return res.status(503).json({ error: 'El webhook de Ko-fi no está configurado.' });
+    let payload;
     try {
-      const session = await stripe.billingPortal.sessions.create({
-        customer: req.customer.stripe_customer_id,
-        return_url: `${customerWebURL}/account.html`
-      });
-      return res.json({ url: session.url });
+      const raw = req.body?.data;
+      payload = typeof raw === 'string' ? JSON.parse(raw) : raw;
     } catch {
-      return res.status(502).json({ error: 'No se pudo abrir el portal de facturación.' });
+      return res.status(400).json({ error: 'El contenido del webhook de Ko-fi no es válido.' });
     }
-  });
-
-  function applyStripeSubscription(subscription) {
-    const stripeCustomerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id;
-    const customerId = subscription.metadata?.ecAudioCustomerId ||
-      db.prepare('SELECT id FROM customer_accounts WHERE stripe_customer_id=?').get(stripeCustomerId)?.id;
-    if (!customerId) return;
-    const priceId = subscription.items?.data?.[0]?.price?.id || null;
-    const plan = priceId === stripeAnnualPriceId ? 'annual' : priceId === stripeMonthlyPriceId ? 'monthly' : 'paid';
-    const status = subscription.status === 'active' || subscription.status === 'trialing'
-      ? 'active' : String(subscription.status || 'inactive');
-    const startedAt = subscription.current_period_start
-      ? new Date(subscription.current_period_start * 1000).toISOString() : new Date().toISOString();
-    const expiresAt = subscription.current_period_end
-      ? new Date(subscription.current_period_end * 1000).toISOString() : null;
-    const now = new Date().toISOString();
-    db.prepare('UPDATE customer_accounts SET stripe_customer_id=COALESCE(stripe_customer_id,?) WHERE id=?')
-      .run(stripeCustomerId || null, customerId);
-    const existing = db.prepare('SELECT id FROM customer_subscriptions WHERE customer_id=?').get(customerId);
-    if (existing) {
-      db.prepare(`
-        UPDATE customer_subscriptions SET status=?,plan=?,started_at=?,expires_at=?,updated_at=?,
-          stripe_subscription_id=?,stripe_price_id=?,cancel_at_period_end=?,billing_interval=?
-        WHERE customer_id=?
-      `).run(status, plan, startedAt, expiresAt, now, subscription.id, priceId,
-        subscription.cancel_at_period_end ? 1 : 0,
-        subscription.items?.data?.[0]?.price?.recurring?.interval || null, customerId);
-    } else {
-      db.prepare(`
-        INSERT INTO customer_subscriptions(id,customer_id,status,plan,started_at,expires_at,updated_at,
-          stripe_subscription_id,stripe_price_id,cancel_at_period_end,billing_interval)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?)
-      `).run(crypto.randomUUID(), customerId, status, plan, startedAt, expiresAt, now,
-        subscription.id, priceId, subscription.cancel_at_period_end ? 1 : 0,
-        subscription.items?.data?.[0]?.price?.recurring?.interval || null);
+    const receivedToken = String(payload?.verification_token || '');
+    const expected = Buffer.from(kofiVerificationToken);
+    const received = Buffer.from(receivedToken);
+    if (expected.length !== received.length || !crypto.timingSafeEqual(expected, received)) {
+      return res.status(401).json({ error: 'Token de verificación de Ko-fi incorrecto.' });
     }
-  }
-
-  app.post('/api/customer/billing/webhook', async (req, res) => {
-    if (!stripe || !stripeWebhookSecret || !req.rawBody) {
-      return res.status(503).json({ error: 'El webhook de Stripe no está configurado.' });
-    }
-    let event;
-    try {
-      event = stripe.webhooks.constructEvent(req.rawBody, req.headers['stripe-signature'], stripeWebhookSecret);
-    } catch {
-      return res.status(400).json({ error: 'Firma de webhook inválida.' });
-    }
-    if (db.prepare('SELECT id FROM stripe_webhook_events WHERE id=?').get(event.id)) {
-      return res.json({ received: true, duplicate: true });
+    const eventId = String(payload?.kofi_transaction_id || payload?.message_id || '').trim();
+    if (!eventId) return res.status(400).json({ error: 'El evento de Ko-fi no contiene un identificador.' });
+    if (db.prepare('SELECT id FROM kofi_webhook_events WHERE id=?').get(eventId)) {
+      return res.status(200).json({ received: true, duplicate: true });
     }
     try {
-      if (event.type === 'checkout.session.completed') {
-        const session = event.data.object;
-        const customerId = session.metadata?.ecAudioCustomerId || session.client_reference_id;
-        const stripeCustomerId = typeof session.customer === 'string' ? session.customer : session.customer?.id;
-        if (customerId && stripeCustomerId) {
-          db.prepare('UPDATE customer_accounts SET stripe_customer_id=? WHERE id=?').run(stripeCustomerId, customerId);
-        }
-        if (session.subscription) {
-          const subscription = await stripe.subscriptions.retrieve(
-            typeof session.subscription === 'string' ? session.subscription : session.subscription.id
-          );
-          applyStripeSubscription(subscription);
-        }
-      } else if (event.type === 'customer.subscription.created' ||
-                 event.type === 'customer.subscription.updated' ||
-                 event.type === 'customer.subscription.deleted') {
-        applyStripeSubscription(event.data.object);
-      } else if (event.type === 'invoice.payment_failed') {
-        const invoice = event.data.object;
-        const subscriptionId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id;
-        if (subscriptionId) {
-          db.prepare("UPDATE customer_subscriptions SET status='past_due',updated_at=? WHERE stripe_subscription_id=?")
-            .run(new Date().toISOString(), subscriptionId);
+      const isMembershipPayment = payload?.is_subscription_payment === true ||
+        payload?.is_subscription_payment === 'true';
+      const tierName = String(payload?.tier_name || '').trim();
+      const currency = String(payload?.currency || '').toUpperCase();
+      const amount = Number(payload?.amount);
+      if (!isMembershipPayment || !kofiMonthlyTierName || tierName !== kofiMonthlyTierName ||
+          currency !== kofiCurrency || !Number.isFinite(amount) || amount <= 0 ||
+          (kofiMonthlyAmount > 0 && Math.abs(amount - kofiMonthlyAmount) > 0.001)) {
+        return res.status(200).json({ received: true, ignored: true, reason: 'not_matching_paid_membership_tier' });
+      }
+
+      const kofiEmail = String(payload?.email || '').trim().toLowerCase();
+      if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(kofiEmail)) {
+        return res.status(400).json({ error: 'El pago no contiene un correo válido.' });
+      }
+      let customer = db.prepare('SELECT id FROM customer_accounts WHERE kofi_email=? COLLATE NOCASE').get(kofiEmail);
+      if (!customer) {
+        const message = String(payload?.message || '');
+        const match = message.match(/\\bEC-[A-F0-9]{10}\\b/i);
+        if (match) {
+          const tokenHash = crypto.createHash('sha256').update(match[0].toUpperCase()).digest('hex');
+          const link = db.prepare('SELECT customer_id FROM kofi_link_tokens WHERE token_hash=? AND used_at IS NULL AND expires_at>?')
+            .get(tokenHash, new Date().toISOString());
+          if (link) {
+            customer = { id: link.customer_id };
+            db.prepare('UPDATE kofi_link_tokens SET used_at=? WHERE token_hash=?')
+              .run(new Date().toISOString(), tokenHash);
+            db.prepare('UPDATE customer_accounts SET kofi_email=? WHERE id=?').run(kofiEmail, customer.id);
+          }
         }
       }
-      db.prepare('INSERT INTO stripe_webhook_events(id,event_type,processed_at) VALUES(?,?,?)')
-        .run(event.id, event.type, new Date().toISOString());
-      return res.json({ received: true });
+      if (!customer) {
+        // Never grant a license by matching an unverified email alone. The first payment
+        // must carry the one-time EC Audio linking code; later renewals use the linked Ko-fi email.
+        db.prepare('INSERT INTO kofi_webhook_events(id,processed_at) VALUES(?,?)').run(eventId, new Date().toISOString());
+        return res.status(200).json({ received: true, ignored: true, reason: 'account_link_code_required' });
+      }
+
+      const now = new Date();
+      const existing = db.prepare('SELECT started_at,expires_at FROM customer_subscriptions WHERE customer_id=?').get(customer.id);
+      const previousExpiry = existing?.expires_at ? Date.parse(existing.expires_at) : 0;
+      const baseTime = Number.isFinite(previousExpiry) && previousExpiry > now.getTime() ? previousExpiry : now.getTime();
+      const expiresAt = new Date(baseTime + 32 * 24 * 60 * 60 * 1000).toISOString();
+      const startedAt = existing?.started_at || now.toISOString();
+      const updatedAt = now.toISOString();
+      if (existing) {
+        db.prepare("UPDATE customer_subscriptions SET status='active',plan='monthly',started_at=?,expires_at=?,updated_at=?,stripe_subscription_id=NULL,stripe_price_id=NULL,cancel_at_period_end=0,billing_interval='month' WHERE customer_id=?")
+          .run(startedAt, expiresAt, updatedAt, customer.id);
+      } else {
+        db.prepare("INSERT INTO customer_subscriptions(id,customer_id,status,plan,started_at,expires_at,updated_at,billing_interval) VALUES(?,?,'active','monthly',?,?,?,'month')")
+          .run(crypto.randomUUID(), customer.id, startedAt, expiresAt, updatedAt);
+      }
+      db.prepare('INSERT INTO kofi_webhook_events(id,processed_at) VALUES(?,?)').run(eventId, updatedAt);
+      return res.status(200).json({ received: true, activated: true });
     } catch {
-      return res.status(500).json({ error: 'No se pudo procesar el evento de Stripe.' });
+      return res.status(500).json({ error: 'No se pudo procesar el pago de Ko-fi.' });
     }
   });
 
