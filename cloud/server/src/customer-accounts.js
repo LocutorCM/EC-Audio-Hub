@@ -354,7 +354,7 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
       const amount = Number(payload?.amount);
       if (!isMembershipPayment || !kofiMonthlyTierName || tierName !== kofiMonthlyTierName ||
           currency !== kofiCurrency || !Number.isFinite(amount) || amount <= 0 ||
-          (kofiMonthlyAmount > 0 && Math.abs(amount - kofiMonthlyAmount) > 0.001)) {
+          (kofiMonthlyAmount > 0 && amount + 0.001 < kofiMonthlyAmount)) {
         return res.status(200).json({ received: true, ignored: true, reason: 'not_matching_paid_membership_tier' });
       }
 
@@ -363,6 +363,10 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
         return res.status(400).json({ error: 'El pago no contiene un correo válido.' });
       }
       let customer = db.prepare('SELECT id FROM customer_accounts WHERE kofi_email=? COLLATE NOCASE').get(kofiEmail);
+      if (!customer) {
+        customer = db.prepare('SELECT id FROM customer_accounts WHERE email=? COLLATE NOCASE').get(kofiEmail);
+        if (customer) db.prepare('UPDATE customer_accounts SET kofi_email=? WHERE id=?').run(kofiEmail, customer.id);
+      }
       if (!customer) {
         const message = String(payload?.message || '');
         const match = message.match(/\bEC-[A-F0-9]{10}\b/i);
