@@ -283,7 +283,7 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
   const kofiVerificationToken = String(process.env.KOFI_VERIFICATION_TOKEN || '');
   const kofiMonthlyTierName = String(process.env.KOFI_MONTHLY_TIER_NAME || '').trim();
   const kofiCurrency = String(process.env.KOFI_CURRENCY || 'USD').toUpperCase();
-  const kofiMonthlyAmount = Number(process.env.KOFI_MONTHLY_AMOUNT || 0);
+  const kofiMonthlyAmount = Number(process.env.KOFI_MONTHLY_AMOUNT || 1);
   db.exec(`
     CREATE TABLE IF NOT EXISTS kofi_webhook_events (
       id TEXT PRIMARY KEY,

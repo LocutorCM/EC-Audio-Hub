@@ -178,7 +178,7 @@ async function loadBillingPlans(user) {
     if (!response.ok) throw new Error(payload.error || "No se pudo consultar la membresía.");
     $("monthlyBtn").textContent = "Unirme a EC Audio en Ko-fi";
     $("monthlyBtn").disabled = false;
-    $("billingNotice").textContent = "Membresía mensual segura mediante Ko-fi. La licencia se activa al confirmarse el pago.";
+    $("billingNotice").textContent = "Plan EC Audio: $1 USD al mes mediante Ko-fi. La licencia se activa al confirmarse el pago.";
   } catch (error) {
     $("billingNotice").textContent = error.message || "La membresía todavía no está disponible.";
     $("monthlyBtn").disabled = true;
