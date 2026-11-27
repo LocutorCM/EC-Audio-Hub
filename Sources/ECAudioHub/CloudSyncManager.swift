@@ -252,7 +252,9 @@ final class CloudSyncManager: ObservableObject {
 
     private func endpoint(_ path: String) -> URL? {
         guard let base = URL(string: serverURL), base.scheme == "https" else { return nil }
-        return base.appendingPathComponent(path)
+        var components = URLComponents(url: base, resolvingAgainstBaseURL: false)
+        components?.path = "/" + path
+        return components?.url
     }
 
     private func loadOfflineCatalog() {
