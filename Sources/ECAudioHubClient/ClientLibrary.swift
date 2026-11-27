@@ -13,17 +13,28 @@ final class ClientLibrary: ObservableObject {
     @Published var isRefreshing = false
     @Published var downloadingIDs: Set<String> = []
     @Published var status = "Conecta con EC Audio Hub para consultar los plugins."
-    @Published var errorMessage: String?\n    @Published var apiBaseURL: String { didSet { UserDefaults.standard.set(apiBaseURL, forKey: "ECAudioHubClient.apiBaseURL") } }\n    @Published var accountEmail = ""\n    @Published var subscriptionStatus = "Sin verificar"\n    @Published var subscriptionActive = false\n    @Published var isAccountBusy = false\n    @Published var accountMessage = ""
+    @Published var errorMessage: String?
+    @Published var apiBaseURL: String { didSet { UserDefaults.standard.set(apiBaseURL, forKey: "ECAudioHubClient.apiBaseURL") } }
+    @Published var accountEmail = ""
+    @Published var subscriptionStatus = "Sin verificar"
+    @Published var subscriptionActive = false
+    @Published var isAccountBusy = false
+    @Published var accountMessage = ""
 
     private let owner = "LocutorCM"
     private let repository = "EC-Audio-Hub"
     private let installedKey = "ECAudioHubClient.installedVersions"
     private let installedPathsKey = "ECAudioHubClient.installedPaths"
-    private let catalogETagKey = "ECAudioHubClient.catalogETag"\n    private let suspendedPluginsKey = "ECAudioHubClient.suspendedPlugins"\n    private let customerTokenKey = "com.locutorcm.ECAudioHub.customerToken"
+    private let catalogETagKey = "ECAudioHubClient.catalogETag"
+    private let suspendedPluginsKey = "ECAudioHubClient.suspendedPlugins"
+    private let customerTokenKey = "com.locutorcm.ECAudioHub.customerToken"
 
     init() {
         installedVersions = UserDefaults.standard.dictionary(forKey: installedKey) as? [String: String] ?? [:]
-        installedPaths = UserDefaults.standard.dictionary(forKey: installedPathsKey) as? [String: [String]] ?? [:]\n        apiBaseURL = UserDefaults.standard.string(forKey: "ECAudioHubClient.apiBaseURL") ?? ""\n        accountEmail = UserDefaults.standard.string(forKey: "ECAudioHubClient.accountEmail") ?? ""\n        subscriptionStatus = UserDefaults.standard.string(forKey: "ECAudioHubClient.subscriptionStatus") ?? "Sin verificar"
+        installedPaths = UserDefaults.standard.dictionary(forKey: installedPathsKey) as? [String: [String]] ?? [:]
+        apiBaseURL = UserDefaults.standard.string(forKey: "ECAudioHubClient.apiBaseURL") ?? ""
+        accountEmail = UserDefaults.standard.string(forKey: "ECAudioHubClient.accountEmail") ?? ""
+        subscriptionStatus = UserDefaults.standard.string(forKey: "ECAudioHubClient.subscriptionStatus") ?? "Sin verificar"
     }
 
     var filteredPlugins: [HubPlugin] {
