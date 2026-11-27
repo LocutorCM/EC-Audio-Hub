@@ -292,4 +292,4 @@ struct AdminRelease: Decodable, Identifiable {
     let assets: [AdminReleaseAsset]
     enum CodingKeys: String, CodingKey { case id, name, assets; case tagName = "tag_name" }
 }
-private struct AdminReleaseAsset: Decodable { let name: String }
+struct AdminReleaseAsset: Decodable { let name: String }
