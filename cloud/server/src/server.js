@@ -12,6 +12,7 @@ const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Database = require('better-sqlite3');
+const { installCustomerAccountApi } = require('./customer-accounts');
 
 const PORT = Number(process.env.PORT || 8080);
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, '..', 'data'));
@@ -70,7 +71,27 @@ app.use(helmet());
 app.use(compression());
 app.use(express.json({ limit: '32kb' }));
 
-app.get('/health', (_req, res) => res.json({ ok: true, service: 'EC Audio Upload Server' }));
+const allowedOrigins = new Set(
+  String(process.env.CORS_ORIGINS || 'https://locutorcm.github.io')
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean)
+);
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  }
+  if (req.method === 'OPTIONS') return res.sendStatus(origin && allowedOrigins.has(origin) ? 204 : 403);
+  return next();
+});
+
+installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret: JWT_SECRET, loginLimiter: rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, standardHeaders: 'draft-7', legacyHeaders: false }) });
+
+app.get('/health', (_req, res) => res.json({ ok: true, service: 'EC Audio Cloud API', customerAccounts: true, demoTrialSeconds: 60 }));
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

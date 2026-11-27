@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import CryptoKit
 import AppKit
+import Security
 
 @MainActor
 final class ClientLibrary: ObservableObject {
@@ -13,17 +14,31 @@ final class ClientLibrary: ObservableObject {
     @Published var downloadingIDs: Set<String> = []
     @Published var status = "Conecta con EC Audio Hub para consultar los plugins."
     @Published var errorMessage: String?
+    @Published var apiBaseURL: String { didSet { UserDefaults.standard.set(apiBaseURL, forKey: "ECAudioHubClient.apiBaseURL") } }
+    @Published var accountEmail = ""
+    @Published var subscriptionStatus = "Sin verificar"
+    @Published var subscriptionActive = false
+    @Published var isAccountBusy = false
+    @Published var accountMessage = ""
 
     private let owner = "LocutorCM"
     private let repository = "EC-Audio-Hub"
     private let installedKey = "ECAudioHubClient.installedVersions"
     private let installedPathsKey = "ECAudioHubClient.installedPaths"
     private let catalogETagKey = "ECAudioHubClient.catalogETag"
+    private let suspendedPluginsKey = "ECAudioHubClient.suspendedPlugins"
+    private let customerTokenKey = "com.locutorcm.ECAudioHub.customerToken"
 
     init() {
         installedVersions = UserDefaults.standard.dictionary(forKey: installedKey) as? [String: String] ?? [:]
         installedPaths = UserDefaults.standard.dictionary(forKey: installedPathsKey) as? [String: [String]] ?? [:]
+        apiBaseURL = UserDefaults.standard.string(forKey: "ECAudioHubClient.apiBaseURL") ?? ""
+        accountEmail = UserDefaults.standard.string(forKey: "ECAudioHubClient.accountEmail") ?? ""
+        subscriptionStatus = UserDefaults.standard.string(forKey: "ECAudioHubClient.subscriptionStatus") ?? "Sin verificar"
     }
+
+    var isLicenseEnforcementEnabled: Bool { !apiBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    var isCustomerSignedIn: Bool { customerToken != nil }
 
     var filteredPlugins: [HubPlugin] {
         guard !searchText.isEmpty else { return plugins }
@@ -144,6 +159,10 @@ final class ClientLibrary: ObservableObject {
     }
 
     func downloadAndInstall(_ plugin: HubPlugin) async {
+        if isLicenseEnforcementEnabled && (!subscriptionActive || customerToken == nil) {
+            accountMessage = "Inicia sesión y activa tu licencia antes de instalar plugins."
+            return
+        }
         guard !downloadingIDs.contains(plugin.id) else { return }
         downloadingIDs.insert(plugin.id)
         defer { downloadingIDs.remove(plugin.id) }
@@ -361,6 +380,221 @@ final class ClientLibrary: ObservableObject {
         status = "\(name) se desinstaló correctamente."
     }
 
+
+    // MARK: - Customer account and subscription
+
+    private var customerToken: String? {
+        get { KeychainStore.read(key: customerTokenKey) }
+        set {
+            if let newValue { KeychainStore.save(newValue, key: customerTokenKey) }
+            else { KeychainStore.delete(key: customerTokenKey) }
+        }
+    }
+
+    private struct CustomerUserDTO: Decodable {
+        let id: String
+        let email: String
+        let displayName: String?
+    }
+    private struct CustomerSubscriptionDTO: Decodable {
+        let status: String
+        let plan: String?
+        let active: Bool
+        let expiresAt: String?
+        let remainingSeconds: Int?
+    }
+    private struct CustomerSessionDTO: Decodable {
+        let token: String
+        let user: CustomerUserDTO
+        let subscription: CustomerSubscriptionDTO
+    }
+    private struct CustomerSubscriptionEnvelope: Decodable {
+        let subscription: CustomerSubscriptionDTO
+    }
+    private struct CustomerActivationDTO: Decodable {
+        let message: String
+        let subscription: CustomerSubscriptionDTO
+    }
+
+    private func customerRequest<T: Decodable>(
+        _ path: String,
+        method: String = "GET",
+        body: Data? = nil,
+        responseType: T.Type
+    ) async throws -> T {
+        guard let base = URL(string: apiBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)),
+              base.scheme?.lowercased() == "https",
+              let url = URL(string: path, relativeTo: base)?.absoluteURL else {
+            throw ClientAccountError.apiNotConfigured
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.timeoutInterval = 20
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let body {
+            request.httpBody = body
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
+        if let token = customerToken {
+            request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
+        }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        guard (200...299).contains(http.statusCode) else {
+            let payload = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            let message = payload?["error"] as? String ?? "El servidor rechazó la solicitud (HTTP \(http.statusCode))."
+            throw ClientAccountError.server(message)
+        }
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    func authenticateCustomer(email: String, password: String, displayName: String, register: Bool) async {
+        guard !isAccountBusy else { return }
+        isAccountBusy = true
+        defer { isAccountBusy = false }
+        do {
+            let payload: [String: String] = [
+                "email": email.trimmingCharacters(in: .whitespacesAndNewlines),
+                "password": password,
+                "displayName": displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+            ]
+            let body = try JSONSerialization.data(withJSONObject: payload)
+            let session: CustomerSessionDTO = try await customerRequest(
+                register ? "/api/customer/auth/register" : "/api/customer/auth/login",
+                method: "POST", body: body, responseType: CustomerSessionDTO.self
+            )
+            customerToken = session.token
+            accountEmail = session.user.email
+            UserDefaults.standard.set(accountEmail, forKey: "ECAudioHubClient.accountEmail")
+            applySubscription(session.subscription)
+            accountMessage = "Sesión iniciada correctamente."
+        } catch {
+            accountMessage = error.localizedDescription
+        }
+    }
+
+    func activateTrial() async {
+        guard !isAccountBusy else { return }
+        isAccountBusy = true
+        defer { isAccountBusy = false }
+        do {
+            let body = "{}".data(using: .utf8)
+            let result: CustomerActivationDTO = try await customerRequest(
+                "/api/customer/subscription/activate",
+                method: "POST", body: body, responseType: CustomerActivationDTO.self
+            )
+            applySubscription(result.subscription)
+            accountMessage = result.message
+        } catch {
+            accountMessage = error.localizedDescription
+        }
+    }
+
+    func checkCustomerEntitlement() async {
+        guard customerToken != nil else { return }
+        do {
+            let result: CustomerSubscriptionEnvelope = try await customerRequest(
+                "/api/customer/subscription", responseType: CustomerSubscriptionEnvelope.self
+            )
+            applySubscription(result.subscription)
+        } catch {
+            // Un fallo de red o servidor no demuestra que la licencia haya vencido.
+            accountMessage = "No se pudo verificar la licencia. Se conserva el estado actual hasta recibir confirmación del servidor."
+        }
+    }
+
+    private func applySubscription(_ subscription: CustomerSubscriptionDTO) {
+        subscriptionActive = subscription.active
+        let expiry = subscription.remainingSeconds.map { " · \($0) s restantes" } ?? ""
+        subscriptionStatus = subscription.active ? "Acceso activo" + expiry :
+            (subscription.status == "expired" ? "Prueba vencida" : "Sin acceso activo")
+        UserDefaults.standard.set(subscriptionStatus, forKey: "ECAudioHubClient.subscriptionStatus")
+        if subscription.active {
+            do { try restoreManagedPlugins() }
+            catch { accountMessage = "Acceso restaurado, pero algunos plugins requieren restauración manual: \(error.localizedDescription)" }
+        } else {
+            do { try suspendManagedPlugins() }
+            catch { accountMessage = "La licencia venció, pero no se pudieron suspender todos los plugins: \(error.localizedDescription)" }
+        }
+    }
+
+    func signOutCustomer() {
+        customerToken = nil
+        accountEmail = ""
+        subscriptionActive = false
+        subscriptionStatus = "Sesión cerrada"
+        UserDefaults.standard.removeObject(forKey: "ECAudioHubClient.accountEmail")
+        UserDefaults.standard.set(subscriptionStatus, forKey: "ECAudioHubClient.subscriptionStatus")
+        accountMessage = "Sesión cerrada. Los plugins instalados permanecen en su estado actual."
+    }
+
+    private func pluginInstallRoot() -> URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Audio/Plug-Ins", isDirectory: true).standardizedFileURL
+    }
+
+    private func isManagedPluginPath(_ url: URL) -> Bool {
+        let root = pluginInstallRoot()
+        let parent = url.deletingLastPathComponent()
+        let allowed = parent == root.appendingPathComponent("VST3", isDirectory: true) ||
+            parent == root.appendingPathComponent("Components", isDirectory: true)
+        let ext = url.pathExtension.lowercased()
+        return allowed && (ext == "vst3" || ext == "component") && installedPaths.values.contains(where: { $0.contains(url.path) })
+    }
+
+    private func suspendManagedPlugins() throws {
+        let manager = FileManager.default
+        var suspended = UserDefaults.standard.dictionary(forKey: suspendedPluginsKey) as? [String: String] ?? [:]
+        let managed = Set(installedPaths.values.flatMap { $0 })
+        for rawPath in managed {
+            let original = URL(fileURLWithPath: rawPath).standardizedFileURL
+            guard isManagedPluginPath(original), manager.fileExists(atPath: original.path) else { continue }
+            let folder = manager.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Application Support/EC Audio Hub/Suspended Plugins", isDirectory: true)
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try manager.createDirectory(at: folder, withIntermediateDirectories: true)
+            let destination = folder.appendingPathComponent(original.lastPathComponent, isDirectory: true)
+            try manager.moveItem(at: original, to: destination)
+            suspended[original.path] = destination.path
+            UserDefaults.standard.set(suspended, forKey: suspendedPluginsKey)
+        }
+        UserDefaults.standard.set(suspended, forKey: suspendedPluginsKey)
+        status = "Licencia vencida: plugins EC Audio suspendidos sin eliminarlos."
+    }
+
+    private func restoreManagedPlugins() throws {
+        let manager = FileManager.default
+        var suspended = UserDefaults.standard.dictionary(forKey: suspendedPluginsKey) as? [String: String] ?? [:]
+        for (originalPath, suspendedPath) in Array(suspended) {
+            let original = URL(fileURLWithPath: originalPath).standardizedFileURL
+            let source = URL(fileURLWithPath: suspendedPath).standardizedFileURL
+            guard manager.fileExists(atPath: source.path) else {
+                suspended.removeValue(forKey: originalPath)
+                continue
+            }
+            guard isManagedPluginOriginalPath(original) else { continue }
+            if manager.fileExists(atPath: original.path) {
+                // Never overwrite a file the user or another installer placed there.
+                continue
+            }
+            try manager.createDirectory(at: original.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try manager.moveItem(at: source, to: original)
+            try? manager.removeItem(at: source.deletingLastPathComponent())
+            suspended.removeValue(forKey: originalPath)
+            UserDefaults.standard.set(suspended, forKey: suspendedPluginsKey)
+        }
+        UserDefaults.standard.set(suspended, forKey: suspendedPluginsKey)
+        status = "Licencia activa: plugins EC Audio restaurados."
+    }
+
+    private func isManagedPluginOriginalPath(_ url: URL) -> Bool {
+        let root = pluginInstallRoot()
+        let parent = url.deletingLastPathComponent()
+        let allowed = parent == root.appendingPathComponent("VST3", isDirectory: true) ||
+            parent == root.appendingPathComponent("Components", isDirectory: true)
+        return allowed && (url.pathExtension.lowercased() == "vst3" || url.pathExtension.lowercased() == "component")
+    }
+
     private func saveForManualInstall(_ source: URL, fileName: String) throws -> URL {
         let folder = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("EC Audio Hub", isDirectory: true)
@@ -370,6 +604,55 @@ final class ClientLibrary: ObservableObject {
         if FileManager.default.fileExists(atPath: destination.path) { try FileManager.default.removeItem(at: destination) }
         try FileManager.default.copyItem(at: source, to: destination)
         return destination
+    }
+}
+
+enum ClientAccountError: LocalizedError {
+    case apiNotConfigured
+    case server(String)
+    var errorDescription: String? {
+        switch self {
+        case .apiNotConfigured:
+            return "Falta configurar la dirección HTTPS del servidor EC Audio."
+        case .server(let message):
+            return message
+        }
+    }
+}
+
+private enum KeychainStore {
+    static func read(key: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "EC Audio Hub Client",
+            kSecAttrAccount as String: key,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+              let data = item as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+    static func save(_ value: String, key: String) {
+        let data = Data(value.utf8)
+        delete(key: key)
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "EC Audio Hub Client",
+            kSecAttrAccount as String: key,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+        ]
+        SecItemAdd(query as CFDictionary, nil)
+    }
+    static func delete(key: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "EC Audio Hub Client",
+            kSecAttrAccount as String: key
+        ]
+        SecItemDelete(query as CFDictionary)
     }
 }
 

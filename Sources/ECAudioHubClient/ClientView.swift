@@ -49,6 +49,7 @@ struct ClientView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedSection = "Biblioteca"
     @State private var pluginToUninstall: String?
+    @State private var showAccountSheet = false
 
     private let navy = Color(hex: 0x0B1424)
     private let panel = Color(hex: 0x14243A)
@@ -79,6 +80,7 @@ struct ClientView: View {
         }
         .background(navy)
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $showAccountSheet) { AccountSheet().environmentObject(library) }
         .alert("EC Audio Hub Client", isPresented: Binding(
             get: { library.errorMessage != nil },
             set: { if !$0 { library.errorMessage = nil } }
@@ -103,17 +105,28 @@ struct ClientView: View {
             Text("Se eliminará este bundle AU/VST3 de la carpeta de plugins de tu usuario, aunque no proceda de EC Audio Hub.")
         }
         .task {
+            await library.checkCustomerEntitlement()
             await library.refresh()
+            var entitlementTicks = 0
             while !Task.isCancelled {
-                // Actualiza el catálogo automáticamente cada 10 segundos.
+                // Catálogo frecuente; licencia comprobada cada 30 segundos.
                 try? await Task.sleep(nanoseconds: 10_000_000_000)
-                if !Task.isCancelled { await library.refresh() }
+                if Task.isCancelled { break }
+                await library.refresh()
+                entitlementTicks += 1
+                if entitlementTicks >= 3 {
+                    entitlementTicks = 0
+                    await library.checkCustomerEntitlement()
+                }
             }
         }
         .onChange(of: scenePhase) { phase in
             // Al volver a abrir/activar la ventana, consulta inmediatamente el catálogo.
             if phase == .active {
-                Task { await library.refresh() }
+                Task {
+                    await library.checkCustomerEntitlement()
+                    await library.refresh()
+                }
             }
         }
     }
@@ -161,6 +174,17 @@ struct ClientView: View {
                     .font(.system(size: 21, weight: .bold, design: .rounded)).foregroundColor(.white)
             }
             Spacer()
+            Button {
+                showAccountSheet = true
+            } label: {
+                Label(library.accountEmail.isEmpty ? "Cuenta" : library.accountEmail, systemImage: "person.crop.circle")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(library.subscriptionActive ? Color.green : .white)
+                    .lineLimit(1)
+                    .padding(.horizontal, 12).padding(.vertical, 9)
+                    .background(panel).cornerRadius(9)
+            }
+            .buttonStyle(.plain)
             Button {
                 Task { await library.refresh() }
             } label: {
@@ -274,6 +298,9 @@ struct ClientView: View {
             Spacer()
             if isBusy {
                 ProgressView().controlSize(.small).padding(.horizontal, 12)
+            } else if library.isLicenseEnforcementEnabled && (!library.subscriptionActive || !library.isCustomerSignedIn) {
+                Button("Activar licencia") { showAccountSheet = true }
+                    .buttonStyle(BlueButtonStyle())
             } else if isCurrent {
                 Label("Instalado", systemImage: "checkmark.circle.fill")
                     .font(.system(size: 10, weight: .semibold)).foregroundColor(.green)

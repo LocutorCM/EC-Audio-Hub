@@ -1,19 +1,26 @@
-# EC Audio Accounts — configuración Firebase
+# EC Audio Accounts — configuración actual
 
-La página de cuenta está en `docs/account.html` y usa Firebase Authentication.
+La página de cuenta `docs/account.html` y la aplicación macOS Client Hub utilizan el mismo API Express del repositorio.
 
-## Activación (una sola vez)
-1. Crea un proyecto en https://console.firebase.google.com/ con el plan Spark.
-2. En **Authentication > Sign-in method**, activa **Email/Password** y **Google**.
-3. En **Authentication > Settings > Authorized domains**, agrega `locutorcm.github.io`.
-4. En **Project settings > General > Your apps**, registra una aplicación web y copia la configuración del SDK.
-5. Sustituye los valores de `docs/js/firebase-config.js` por los valores reales de tu aplicación web.
-6. Publica el sitio y prueba registro, inicio de sesión, Google y recuperación de contraseña.
+## Configuración
 
-La configuración web de Firebase está diseñada para estar en el frontend; no subas service-account JSON, claves privadas ni secretos OAuth al repositorio.
+1. Publica el servidor siguiendo [cloud/DEPLOY_RENDER.md](../cloud/DEPLOY_RENDER.md) o la guía de [cloud/server/CUSTOMER-ACCOUNTS.md](../cloud/server/CUSTOMER-ACCOUNTS.md).
+2. Copia el origen HTTPS del servidor.
+3. Sustituye el valor vacío de `API_BASE_URL` en `docs/js/api-config.js` por el origen HTTPS, sin barra final.
+4. Publica GitHub Pages.
+5. En macOS Client Hub, abre **Cuenta** y pega el mismo origen HTTPS.
+6. Registra una cuenta con correo y contraseña en la web o en el Client Hub. Las credenciales son las mismas en ambos.
 
-## Importante
-- El Client Hub de escritorio todavía no se modifica.
-- La futura integración de escritorio debe autenticar contra el mismo proyecto Firebase para compartir identidad con la web.
-- Apple y X requieren configuración adicional de proveedor y credenciales de desarrollador; no están habilitados en esta primera etapa.
-- Para producción, configura restricciones de API y políticas de seguridad adecuadas.
+## Funciones actuales
+
+- Registro e inicio de sesión con correo y contraseña.
+- Contraseñas almacenadas mediante bcrypt en el servidor.
+- Token de cliente independiente del token de administrador.
+- Prueba gratuita de $0 MXN durante 60 segundos, sin tarjeta ni cobro.
+- El token de escritorio se guarda en macOS Keychain.
+- El Client Hub consulta el estado de licencia cada 30 segundos. Solo una respuesta válida del servidor que confirme el vencimiento suspende los plugins EC Audio administrados. Los errores de red no los desactivan.
+- Los plugins suspendidos se mueven a una carpeta local de resguardo y se restauran cuando el servidor confirma una suscripción activa.
+
+## Proveedores sociales y pagos
+
+Google, Apple y otros proveedores sociales no están habilitados en esta versión del API. Para activarlos hay que configurar credenciales OAuth del proyecto y añadir la verificación de identidad del lado del servidor. La activación actual es una demostración gratuita; no procesa pagos. Antes de vender suscripciones, integrar un proveedor de pagos y aceptar solo notificaciones verificadas del servidor.

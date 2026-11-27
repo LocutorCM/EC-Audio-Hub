@@ -1,15 +1,18 @@
 # EC Audio Upload Server
 
-A minimal, self-hosted HTTPS API for the EC Audio Hub macOS administrator uploader.
+The EC Audio Hub HTTPS API for administrator uploads and customer accounts/licensing.
 
 ## What it does
 - Admin email/password sign-in.
 - One authenticated file upload endpoint.
+- Customer registration and email/password login.
+- Server-authoritative free 60-second demo subscriptions.
+- Customer entitlement endpoint for the macOS Client Hub.
 - Private storage under /data/uploads.
 - SQLite metadata records and SHA-256 checksums.
 - Default maximum upload size: 2 GB (MAX_UPLOAD_GB can be increased).
 
-There is no customer catalog, public file hosting, download endpoint, license system, or web admin console in this version.
+The customer API and demo entitlement endpoints are documented in [CUSTOMER-ACCOUNTS.md](CUSTOMER-ACCOUNTS.md). Plugin catalog delivery remains on GitHub Releases.
 
 ## Deploy
 1. Install Docker Engine and Docker Compose.
@@ -18,7 +21,7 @@ There is no customer catalog, public file hosting, download endpoint, license sy
 4. Set a random JWT_SECRET (at least 40 characters), ADMIN_EMAIL, and a unique ADMIN_PASSWORD (at least 14 characters).
 5. Run docker compose up -d --build.
 6. Put Caddy or Nginx in front of port 8080 and enable HTTPS.
-7. Use the resulting HTTPS address in EC Audio Hub.
+7. Set CORS_ORIGINS to the exact website origin (default: https://locutorcm.github.io).\n8. Use the resulting HTTPS address in the website config and macOS Client Hub account settings.
 
 Example Caddy site:
 

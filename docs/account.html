@@ -22,15 +22,15 @@ label{display:block;color:#c7d5e6;font-size:12px;font-weight:700;margin:15px 0 7
 <form id="authForm">
 <div id="nameWrap" class="hidden"><label for="displayName">Nombre</label><input id="displayName" autocomplete="name" placeholder="Tu nombre"></div>
 <label for="email">Correo electrónico</label><input id="email" type="email" autocomplete="email" required placeholder="nombre@correo.com">
-<label for="password">Contraseña</label><input id="password" type="password" autocomplete="current-password" minlength="6" required placeholder="Mínimo 6 caracteres">
+<label for="password">Contraseña</label><input id="password" type="password" autocomplete="current-password" minlength="10" maxlength="128" required placeholder="Mínimo 10 caracteres">
 <button class="btn primary" id="submitBtn" type="submit">Iniciar sesión</button>
 </form>
-<div class="divider">o continúa con</div><button class="btn google" id="googleBtn" type="button">G · Continuar con Google</button>
+<div class="divider">Acceso seguro</div><p class="small">Tu cuenta será la misma que utilizarás en EC Audio Client Hub.</p><button class="btn google hidden" id="googleBtn" type="button">Google</button>
 <div class="links"><a href="#" id="forgotBtn">¿Olvidaste tu contraseña?</a><a href="./">Volver al sitio</a></div>
 <p class="note" id="message" role="status" aria-live="polite"></p>
-<p class="small">Al continuar aceptas utilizar EC Audio de forma responsable. Tu cuenta se administra de forma segura mediante Firebase Authentication.</p>
+<p class="small">Al continuar aceptas utilizar EC Audio de forma responsable. La contraseña se almacena protegida en el servidor de EC Audio.</p>
 </section>
-<section class="panel account hidden" id="accountPanel"><div class="avatar" id="avatar">EC</div><div class="eyebrow">Sesión activa</div><h1>Bienvenido a EC Audio</h1><p id="userEmail"></p><p id="userName"></p><button class="btn primary" id="signoutBtn" type="button">Cerrar sesión</button><p class="back"><a href="./">Volver al sitio principal</a></p></section>
+<section class="panel account hidden" id="accountPanel"><div class="avatar" id="avatar">EC</div><div class="eyebrow">Sesión activa</div><h1>Bienvenido a EC Audio</h1><p id="userEmail"></p><p id="userName"></p><div style="margin:24px 0;padding:20px;border:1px solid #314760;border-radius:16px;background:#091321;text-align:left"><div class="eyebrow" style="text-align:left">Tu licencia</div><p id="subscriptionStatus" style="margin:10px 0;color:#dce8f7">Consultando estado…</p><button class="btn primary" id="activateTrialBtn" type="button">Activar prueba gratuita · $0 MXN</button><p class="small">Prueba gratuita de 1 minuto, sin tarjeta y sin cobro. Es una activación de demostración.</p></div><button class="btn primary" id="signoutBtn" type="button">Cerrar sesión</button><p class="back"><a href="./">Volver al sitio principal</a></p></section>
 <p class="back"><a href="./">← Regresar a EC Audio</a></p>
 </main>
 <script type="module" src="./js/auth.js"></script>
