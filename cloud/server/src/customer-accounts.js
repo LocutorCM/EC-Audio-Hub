@@ -267,7 +267,6 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
       subscription: subscriptionFor(req.customer.id)
     });
   });
-}
 
   // Stripe catalog is read-only; secret keys and price IDs stay on the server.
   app.get('/api/customer/billing/plans', async (_req, res) => {
@@ -466,6 +465,6 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
       .run(new Date().toISOString(), req.params.deviceId, req.customer.id);
     return res.json({ released: true });
   });
-
+}
 
 module.exports = { installCustomerAccountApi };
