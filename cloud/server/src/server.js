@@ -11,7 +11,6 @@ const rateLimit = require('express-rate-limit');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const Stripe = require('stripe');
 const Database = require('better-sqlite3');
 const { installCustomerAccountApi } = require('./customer-accounts');
 
@@ -25,13 +24,11 @@ const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || '');
 const FIREBASE_API_KEY = String(process.env.FIREBASE_API_KEY || '');
 const FIREBASE_PROJECT_ID = String(process.env.FIREBASE_PROJECT_ID || '');
-const STRIPE_SECRET_KEY = String(process.env.STRIPE_SECRET_KEY || '');
-const STRIPE_WEBHOOK_SECRET = String(process.env.STRIPE_WEBHOOK_SECRET || '');
-const STRIPE_MONTHLY_PRICE_ID = String(process.env.STRIPE_MONTHLY_PRICE_ID || '');
-const STRIPE_ANNUAL_PRICE_ID = String(process.env.STRIPE_ANNUAL_PRICE_ID || '');
+const KOFI_PAGE_URL = String(process.env.KOFI_PAGE_URL || 'https://ko-fi.com/ecaudio');
+const KOFI_VERIFICATION_TOKEN = String(process.env.KOFI_VERIFICATION_TOKEN || '');
+const KOFI_MONTHLY_TIER_NAME = String(process.env.KOFI_MONTHLY_TIER_NAME || '');
 const CUSTOMER_WEB_URL = String(process.env.CUSTOMER_WEB_URL || 'https://locutorcm.github.io/EC-Audio-Hub').replace(/\/$/, '');
 const MAX_ACTIVE_DEVICES = Math.max(1, Number(process.env.MAX_ACTIVE_DEVICES || 2));
-const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 const MAX_UPLOAD = Math.max(1, Number(process.env.MAX_UPLOAD_GB || 2)) * 1024 * 1024 * 1024;
 
 if (!JWT_SECRET || JWT_SECRET.length < 40) throw new Error('JWT_SECRET must contain at least 40 characters.');
@@ -79,9 +76,8 @@ const app = express();
 app.disable('x-powered-by');
 app.use(helmet());
 app.use(compression());
-app.use(express.json({ limit: '32kb', verify: (req, _res, buffer) => {
-  if (req.originalUrl.startsWith('/api/customer/billing/webhook')) req.rawBody = Buffer.from(buffer);
-} }));
+app.use(express.urlencoded({ extended: false, limit: '64kb' }));
+app.use(express.json({ limit: '32kb' }));
 
 const allowedOrigins = new Set(
   String(process.env.CORS_ORIGINS || 'https://locutorcm.github.io')
@@ -101,9 +97,9 @@ app.use((req, res, next) => {
   return next();
 });
 
-installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret: JWT_SECRET, firebaseApiKey: FIREBASE_API_KEY, firebaseProjectId: FIREBASE_PROJECT_ID, stripe, stripeWebhookSecret: STRIPE_WEBHOOK_SECRET, stripeMonthlyPriceId: STRIPE_MONTHLY_PRICE_ID, stripeAnnualPriceId: STRIPE_ANNUAL_PRICE_ID, customerWebURL: CUSTOMER_WEB_URL, maxActiveDevices: MAX_ACTIVE_DEVICES, loginLimiter: rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, standardHeaders: 'draft-7', legacyHeaders: false }) });
+installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret: JWT_SECRET, firebaseApiKey: FIREBASE_API_KEY, firebaseProjectId: FIREBASE_PROJECT_ID, customerWebURL: CUSTOMER_WEB_URL, maxActiveDevices: MAX_ACTIVE_DEVICES, loginLimiter: rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, standardHeaders: 'draft-7', legacyHeaders: false }) });
 
-app.get('/health', (_req, res) => res.json({ ok: true, service: 'EC Audio Cloud API', customerAccounts: true, firebaseConfigured: Boolean(FIREBASE_API_KEY && FIREBASE_PROJECT_ID), stripeConfigured: Boolean(stripe && STRIPE_WEBHOOK_SECRET && STRIPE_MONTHLY_PRICE_ID && STRIPE_ANNUAL_PRICE_ID), demoTrialSeconds: 60 }));
+app.get('/health', (_req, res) => res.json({ ok: true, service: 'EC Audio Cloud API', customerAccounts: true, firebaseConfigured: Boolean(FIREBASE_API_KEY && FIREBASE_PROJECT_ID), kofiConfigured: Boolean(KOFI_VERIFICATION_TOKEN && KOFI_MONTHLY_TIER_NAME), kofiPageURL: KOFI_PAGE_URL, demoTrialSeconds: 60 }));
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -147,24 +143,12 @@ function auth(req, res, next) {
    const customers = db.prepare("SELECT c.id,c.email,c.display_name AS displayName,c.created_at AS createdAt,s.status,s.plan,s.started_at AS startedAt,s.expires_at AS expiresAt,s.cancel_at_period_end AS cancelAtPeriodEnd,s.billing_interval AS billingInterval,(SELECT COUNT(*) FROM customer_devices d WHERE d.customer_id=c.id AND d.active=1) AS activeDevices FROM customer_accounts c LEFT JOIN customer_subscriptions s ON s.customer_id=c.id ORDER BY c.created_at DESC LIMIT 250").all();
    return res.json({ totals, customers });
  });
- app.post('/api/admin/licensing/customers/:customerId/revoke', auth, async (req, res) => {
-   const subscription = db.prepare('SELECT stripe_subscription_id FROM customer_subscriptions WHERE customer_id=?').get(req.params.customerId);
-   if (!subscription) return res.status(404).json({ error: 'No se encontró una suscripción para esa cuenta.' });
-   try {
-     if (stripe && subscription.stripe_subscription_id) {
-       await stripe.subscriptions.cancel(subscription.stripe_subscription_id);
-       const now = new Date().toISOString();
-       db.prepare("UPDATE customer_subscriptions SET status='canceled',expires_at=?,cancel_at_period_end=0,updated_at=? WHERE customer_id=?")
-         .run(now, now, req.params.customerId);
-     } else {
-       const now = new Date().toISOString();
-       db.prepare("UPDATE customer_subscriptions SET status='canceled',expires_at=?,cancel_at_period_end=0,updated_at=? WHERE customer_id=?")
-         .run(now, now, req.params.customerId);
-     }
-     return res.json({ revoked: true });
-   } catch {
-     return res.status(502).json({ error: 'No se pudo revocar la suscripción en Stripe.' });
-   }
+ app.post('/api/admin/licensing/customers/:customerId/revoke', auth, (req, res) => {
+   const now = new Date().toISOString();
+   const result = db.prepare("UPDATE customer_subscriptions SET status='canceled',expires_at=?,cancel_at_period_end=0,updated_at=? WHERE customer_id=?")
+     .run(now, now, req.params.customerId);
+   if (!result.changes) return res.status(404).json({ error: 'No se encontró una suscripción para esa cuenta.' });
+   return res.json({ revoked: true });
  });
  app.get('/api/admin/licensing/customers/:customerId/devices', auth, (req, res) => {
    const devices = db.prepare('SELECT device_id AS deviceId,device_name AS deviceName,platform,active,first_seen_at AS firstSeenAt,last_seen_at AS lastSeenAt FROM customer_devices WHERE customer_id=? ORDER BY last_seen_at DESC')

@@ -29,14 +29,16 @@ services:
         sync: false
       - key: FIREBASE_PROJECT_ID
         value: ec-audio-accounts
-      - key: STRIPE_SECRET_KEY
+      - key: KOFI_PAGE_URL
+        value: https://ko-fi.com/ecaudio
+      - key: KOFI_VERIFICATION_TOKEN
         sync: false
-      - key: STRIPE_WEBHOOK_SECRET
+      - key: KOFI_MONTHLY_TIER_NAME
         sync: false
-      - key: STRIPE_MONTHLY_PRICE_ID
-        sync: false
-      - key: STRIPE_ANNUAL_PRICE_ID
-        sync: false
+      - key: KOFI_CURRENCY
+        value: USD
+      - key: KOFI_MONTHLY_AMOUNT
+        value: "0"
       - key: CUSTOMER_WEB_URL
         value: https://locutorcm.github.io/EC-Audio-Hub
       - key: MAX_ACTIVE_DEVICES
