@@ -156,7 +156,7 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
           customer = db.prepare('SELECT id,email,display_name,active,firebase_uid FROM customer_accounts WHERE id=?').get(existing.id);
         } else {
           const now = new Date().toISOString(); const id = crypto.randomUUID();
-          db.prepare("INSERT INTO customer_accounts(id,email,display_name,password_hash,active,created_at,firebase_uid) VALUES(?,?,?,'!firebase-managed!',1,?,?)").run(id, identity.email, identity.displayName, now, identity.uid);
+          db.prepare('INSERT INTO customer_accounts(id,email,display_name,password_hash,active,created_at,firebase_uid) VALUES(?,?,?,?,1,?,?)').run(id, identity.email, identity.displayName, bcrypt.hashSync(crypto.randomBytes(32).toString('hex'), 12), now, identity.uid);
           customer = db.prepare('SELECT id,email,display_name,active,firebase_uid FROM customer_accounts WHERE id=?').get(id);
         }
       }
