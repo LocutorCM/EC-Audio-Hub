@@ -11,6 +11,7 @@ const rateLimit = require('express-rate-limit');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const Stripe = require('stripe');
 const Database = require('better-sqlite3');
 const { installCustomerAccountApi } = require('./customer-accounts');
 
@@ -24,6 +25,13 @@ const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || '');
 const FIREBASE_API_KEY = String(process.env.FIREBASE_API_KEY || '');
 const FIREBASE_PROJECT_ID = String(process.env.FIREBASE_PROJECT_ID || '');
+const STRIPE_SECRET_KEY = String(process.env.STRIPE_SECRET_KEY || '');
+const STRIPE_WEBHOOK_SECRET = String(process.env.STRIPE_WEBHOOK_SECRET || '');
+const STRIPE_MONTHLY_PRICE_ID = String(process.env.STRIPE_MONTHLY_PRICE_ID || '');
+const STRIPE_ANNUAL_PRICE_ID = String(process.env.STRIPE_ANNUAL_PRICE_ID || '');
+const CUSTOMER_WEB_URL = String(process.env.CUSTOMER_WEB_URL || 'https://locutorcm.github.io/EC-Audio-Hub').replace(/\\/$/, '');
+const MAX_ACTIVE_DEVICES = Math.max(1, Number(process.env.MAX_ACTIVE_DEVICES || 2));
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 const MAX_UPLOAD = Math.max(1, Number(process.env.MAX_UPLOAD_GB || 2)) * 1024 * 1024 * 1024;
 
 if (!JWT_SECRET || JWT_SECRET.length < 40) throw new Error('JWT_SECRET must contain at least 40 characters.');
@@ -71,7 +79,9 @@ const app = express();
 app.disable('x-powered-by');
 app.use(helmet());
 app.use(compression());
-app.use(express.json({ limit: '32kb' }));
+app.use(express.json({ limit: '32kb', verify: (req, _res, buffer) => {
+  if (req.originalUrl.startsWith('/api/customer/billing/webhook')) req.rawBody = Buffer.from(buffer);
+} }));
 
 const allowedOrigins = new Set(
   String(process.env.CORS_ORIGINS || 'https://locutorcm.github.io')
@@ -91,9 +101,9 @@ app.use((req, res, next) => {
   return next();
 });
 
-installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret: JWT_SECRET, firebaseApiKey: FIREBASE_API_KEY, firebaseProjectId: FIREBASE_PROJECT_ID, loginLimiter: rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, standardHeaders: 'draft-7', legacyHeaders: false }) });
+installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret: JWT_SECRET, firebaseApiKey: FIREBASE_API_KEY, firebaseProjectId: FIREBASE_PROJECT_ID, stripe, stripeWebhookSecret: STRIPE_WEBHOOK_SECRET, stripeMonthlyPriceId: STRIPE_MONTHLY_PRICE_ID, stripeAnnualPriceId: STRIPE_ANNUAL_PRICE_ID, customerWebURL: CUSTOMER_WEB_URL, maxActiveDevices: MAX_ACTIVE_DEVICES, loginLimiter: rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, standardHeaders: 'draft-7', legacyHeaders: false }) });
 
-app.get('/health', (_req, res) => res.json({ ok: true, service: 'EC Audio Cloud API', customerAccounts: true, firebaseConfigured: Boolean(FIREBASE_API_KEY && FIREBASE_PROJECT_ID), demoTrialSeconds: 60 }));
+app.get('/health', (_req, res) => res.json({ ok: true, service: 'EC Audio Cloud API', customerAccounts: true, firebaseConfigured: Boolean(FIREBASE_API_KEY && FIREBASE_PROJECT_ID), stripeConfigured: Boolean(stripe && STRIPE_WEBHOOK_SECRET && STRIPE_MONTHLY_PRICE_ID && STRIPE_ANNUAL_PRICE_ID), demoTrialSeconds: 60 }));
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
