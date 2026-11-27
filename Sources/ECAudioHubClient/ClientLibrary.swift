@@ -28,6 +28,15 @@ final class ClientLibrary: ObservableObject {
     private let catalogETagKey = "ECAudioHubClient.catalogETag"
     private let suspendedPluginsKey = "ECAudioHubClient.suspendedPlugins"
     private let customerTokenKey = "com.locutorcm.ECAudioHub.customerToken"
+    private let firebaseAPIKey = "AIzaSyCXcjmEv0tdynd0gyKDsZAh4mS998lw5tU"
+    private let firebaseProjectID = "ec-audio-accounts"
+
+    private struct FirebaseAuthDTO: Decodable {
+        let idToken: String
+        let email: String?
+        let localId: String
+        let displayName: String?
+    }
 
     init() {
         installedVersions = UserDefaults.standard.dictionary(forKey: installedKey) as? [String: String] ?? [:]
@@ -450,24 +459,43 @@ final class ClientLibrary: ObservableObject {
 
     func authenticateCustomer(email: String, password: String, displayName: String, register: Bool) async {
         guard !isAccountBusy else { return }
+        guard !apiBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            accountMessage = "El servidor de cuentas aún no está publicado. Cuando esté disponible, el mismo acceso de la página funcionará aquí."
+            return
+        }
         isAccountBusy = true
         defer { isAccountBusy = false }
         do {
-            let payload: [String: String] = [
+            let action = register ? "signUp" : "signInWithPassword"
+            guard let firebaseURL = URL(string: "https://identitytoolkit.googleapis.com/v1/accounts:\(action)?key=\(firebaseAPIKey)") else {
+                throw ClientAccountError.server("No se pudo preparar la conexión con Firebase.")
+            }
+            var firebaseRequest = URLRequest(url: firebaseURL)
+            firebaseRequest.httpMethod = "POST"
+            firebaseRequest.timeoutInterval = 20
+            firebaseRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            firebaseRequest.httpBody = try JSONSerialization.data(withJSONObject: [
                 "email": email.trimmingCharacters(in: .whitespacesAndNewlines),
                 "password": password,
-                "displayName": displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-            ]
-            let body = try JSONSerialization.data(withJSONObject: payload)
+                "returnSecureToken": true
+            ])
+            let (firebaseData, firebaseResponse) = try await URLSession.shared.data(for: firebaseRequest)
+            guard let firebaseHTTP = firebaseResponse as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+            guard (200...299).contains(firebaseHTTP.statusCode) else {
+                let payload = (try? JSONSerialization.jsonObject(with: firebaseData)) as? [String: Any]
+                let error = (payload?["error"] as? [String: Any])?["message"] as? String ?? "Firebase no pudo iniciar sesión."
+                throw ClientAccountError.server(error.replacingOccurrences(of: "_", with: " "))
+            }
+            let firebaseSession = try JSONDecoder().decode(FirebaseAuthDTO.self, from: firebaseData)
+            let exchangeBody = try JSONSerialization.data(withJSONObject: ["idToken": firebaseSession.idToken])
             let session: CustomerSessionDTO = try await customerRequest(
-                register ? "/api/customer/auth/register" : "/api/customer/auth/login",
-                method: "POST", body: body, responseType: CustomerSessionDTO.self
+                "/api/customer/auth/firebase", method: "POST", body: exchangeBody, responseType: CustomerSessionDTO.self
             )
             customerToken = session.token
             accountEmail = session.user.email
             UserDefaults.standard.set(accountEmail, forKey: "ECAudioHubClient.accountEmail")
             applySubscription(session.subscription)
-            accountMessage = "Sesión iniciada correctamente."
+            accountMessage = register ? "Cuenta creada y vinculada con EC Audio." : "Sesión iniciada con tu cuenta EC Audio."
         } catch {
             accountMessage = error.localizedDescription
         }

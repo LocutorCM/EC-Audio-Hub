@@ -22,6 +22,8 @@ const DB_FILE = path.join(DATA_DIR, 'ec-audio.sqlite');
 const JWT_SECRET = process.env.JWT_SECRET;
 const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || '');
+const FIREBASE_API_KEY = String(process.env.FIREBASE_API_KEY || '');
+const FIREBASE_PROJECT_ID = String(process.env.FIREBASE_PROJECT_ID || '');
 const MAX_UPLOAD = Math.max(1, Number(process.env.MAX_UPLOAD_GB || 2)) * 1024 * 1024 * 1024;
 
 if (!JWT_SECRET || JWT_SECRET.length < 40) throw new Error('JWT_SECRET must contain at least 40 characters.');
@@ -89,9 +91,9 @@ app.use((req, res, next) => {
   return next();
 });
 
-installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret: JWT_SECRET, loginLimiter: rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, standardHeaders: 'draft-7', legacyHeaders: false }) });
+installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret: JWT_SECRET, firebaseApiKey: FIREBASE_API_KEY, firebaseProjectId: FIREBASE_PROJECT_ID, loginLimiter: rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, standardHeaders: 'draft-7', legacyHeaders: false }) });
 
-app.get('/health', (_req, res) => res.json({ ok: true, service: 'EC Audio Cloud API', customerAccounts: true, demoTrialSeconds: 60 }));
+app.get('/health', (_req, res) => res.json({ ok: true, service: 'EC Audio Cloud API', customerAccounts: true, firebaseConfigured: Boolean(FIREBASE_API_KEY && FIREBASE_PROJECT_ID), demoTrialSeconds: 60 }));
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

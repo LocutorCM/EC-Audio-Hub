@@ -83,3 +83,13 @@ curl -i https://YOUR_API_HOST/api/customer/subscription \
 ```
 
 This repository change prepares the API source. It does not deploy or expose a live API host by itself. GitHub Pages is static hosting and cannot run this Express process or persist its SQLite database.
+
+## Shared Firebase identity
+
+The website and native macOS Client Hub now use the Firebase project `ec-audio-accounts` as the single customer identity. Configure `FIREBASE_API_KEY` and `FIREBASE_PROJECT_ID=ec-audio-accounts` on the server.
+
+Both clients send their Firebase ID token to `POST /api/customer/auth/firebase`. The server validates it with Firebase Identity Toolkit `accounts:lookup`, maps the Firebase UID to one EC Audio customer record, and returns an EC Audio customer JWT plus the current subscription. The macOS app stores that EC Audio JWT in Keychain.
+
+The older `/register` and `/login` routes remain only for compatibility with accounts created before Firebase was connected. New web and Client Hub sign-ins should use the Firebase exchange endpoint.
+
+Native macOS sign-in currently supports Firebase email/password. Google popup sign-in is available on the website; native Google sign-in requires a Google OAuth Client ID for the macOS app.

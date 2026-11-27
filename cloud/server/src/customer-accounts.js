@@ -2,7 +2,7 @@
 
 const crypto = require('node:crypto');
 
-function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimiter }) {
+function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimiter, firebaseApiKey, firebaseProjectId, firebaseTokenVerifier }) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS customer_accounts (
       id TEXT PRIMARY KEY,
@@ -26,6 +26,22 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
       ON customer_subscriptions(status, expires_at);
   `);
 
+  const customerColumns = db.prepare('PRAGMA table_info(customer_accounts)').all().map(column => column.name);
+  if (!customerColumns.includes('firebase_uid')) db.exec('ALTER TABLE customer_accounts ADD COLUMN firebase_uid TEXT');
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_accounts_firebase_uid ON customer_accounts(firebase_uid) WHERE firebase_uid IS NOT NULL');
+
+  async function verifyFirebaseIdToken(idToken) {
+    if (firebaseTokenVerifier) return firebaseTokenVerifier(idToken);
+    if (!firebaseApiKey || !firebaseProjectId) { const error = new Error('La conexión con Firebase no está configurada en el servidor.'); error.status = 503; throw error; }
+    const response = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + encodeURIComponent(firebaseApiKey), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken }), signal: AbortSignal.timeout(10000)
+    });
+    if (!response.ok) { const error = new Error('Firebase rechazó la sesión. Inicia sesión nuevamente.'); error.status = 401; throw error; }
+    const payload = await response.json(); const user = payload.users?.[0];
+    if (!user?.localId || !user.email) { const error = new Error('La cuenta de Firebase no contiene un correo válido.'); error.status = 401; throw error; }
+    if (user.tenantId) { const error = new Error('Las cuentas de Firebase con tenant no están habilitadas.'); error.status = 403; throw error; }
+    return { uid: user.localId, email: String(user.email).trim().toLowerCase(), displayName: String(user.displayName || '').trim().slice(0, 80), emailVerified: user.emailVerified === true };
+  }
   const issueCustomerToken = (customer) => jwt.sign(
     { sub: customer.id, role: 'customer' },
     jwtSecret,
@@ -124,6 +140,30 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
     });
   });
 
+  // Exchange a Firebase ID token for the shared EC Audio customer session.
+  app.post('/api/customer/auth/firebase', loginLimiter, async (req, res) => {
+    const idToken = String(req.body?.idToken || '');
+    if (!idToken || idToken.length > 10000) return res.status(400).json({ error: 'Falta el token de acceso de Firebase.' });
+    try {
+      const identity = await verifyFirebaseIdToken(idToken);
+      let customer = db.prepare('SELECT id,email,display_name,active,firebase_uid FROM customer_accounts WHERE firebase_uid=?').get(identity.uid);
+      if (!customer) {
+        const existing = db.prepare('SELECT id,email,display_name,active,firebase_uid FROM customer_accounts WHERE email=? COLLATE NOCASE').get(identity.email);
+        if (existing) {
+          if (!identity.emailVerified) return res.status(409).json({ error: 'Verifica tu correo en Firebase antes de vincular esta cuenta existente.' });
+          if (existing.firebase_uid && existing.firebase_uid !== identity.uid) return res.status(409).json({ error: 'Este correo ya está vinculado a otra identidad de Firebase.' });
+          db.prepare("UPDATE customer_accounts SET firebase_uid=?,display_name=CASE WHEN display_name='' THEN ? ELSE display_name END WHERE id=?").run(identity.uid, identity.displayName, existing.id);
+          customer = db.prepare('SELECT id,email,display_name,active,firebase_uid FROM customer_accounts WHERE id=?').get(existing.id);
+        } else {
+          const now = new Date().toISOString(); const id = crypto.randomUUID();
+          db.prepare('INSERT INTO customer_accounts(id,email,display_name,password_hash,active,created_at,firebase_uid) VALUES(?,?,?,?,1,?,?)').run(id, identity.email, identity.displayName, bcrypt.hashSync(crypto.randomBytes(32).toString('hex'), 12), now, identity.uid);
+          customer = db.prepare('SELECT id,email,display_name,active,firebase_uid FROM customer_accounts WHERE id=?').get(id);
+        }
+      }
+      if (!customer || !customer.active) return res.status(403).json({ error: 'La cuenta EC Audio está deshabilitada.' });
+      return res.json({ token: issueCustomerToken(customer), user: { id: customer.id, email: customer.email, displayName: customer.display_name }, subscription: subscriptionFor(customer.id) });
+    } catch (error) { return res.status(error.status || 503).json({ error: error.message || 'No se pudo validar la cuenta de Firebase.' }); }
+  });
   app.get('/api/customer/auth/me', customerAuth, (req, res) => {
     return res.json({
       user: {

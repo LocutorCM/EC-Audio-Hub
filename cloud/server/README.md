@@ -5,7 +5,7 @@ The EC Audio Hub HTTPS API for administrator uploads and customer accounts/licen
 ## What it does
 - Admin email/password sign-in.
 - One authenticated file upload endpoint.
-- Customer registration and email/password login.
+- Shared Firebase customer identity for website and macOS Client Hub (Email/Password and Google identities created on the web).
 - Server-authoritative free 60-second demo subscriptions.
 - Customer entitlement endpoint for the macOS Client Hub.
 - Private storage under /data/uploads.
@@ -18,7 +18,7 @@ The customer API and demo entitlement endpoints are documented in [CUSTOMER-ACCO
 1. Install Docker Engine and Docker Compose.
 2. Copy this folder to your VPS.
 3. Run cp .env.example .env.
-4. Set a random JWT_SECRET (at least 40 characters), ADMIN_EMAIL, and a unique ADMIN_PASSWORD (at least 14 characters).
+4. Set a random JWT_SECRET (at least 40 characters), ADMIN_EMAIL, a unique ADMIN_PASSWORD (at least 14 characters), FIREBASE_API_KEY, and FIREBASE_PROJECT_ID=ec-audio-accounts.
 5. Run docker compose up -d --build.
 6. Put Caddy or Nginx in front of port 8080 and enable HTTPS.
 7. Set CORS_ORIGINS to the exact website origin (default: https://locutorcm.github.io).\n8. Use the resulting HTTPS address in the website config and macOS Client Hub account settings.
@@ -33,6 +33,7 @@ hub.example.com {
 
 ## API
 - GET /health
+- POST /api/customer/auth/firebase — exchange a Firebase ID token for an EC Audio session.
 - POST /api/auth/login
 - POST /api/admin/files — admin JWT required; multipart field name is installer.
 
