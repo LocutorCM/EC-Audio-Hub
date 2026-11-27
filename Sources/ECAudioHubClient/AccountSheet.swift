@@ -74,14 +74,14 @@ struct AccountSheet: View {
             Button {
                 let switchAccount = !library.accountEmail.isEmpty
                 let address = switchAccount
-                    ? "https://locutorcm.github.io/EC-Audio-Hub/account.html?client=1&switch=1"
-                    : "https://locutorcm.github.io/EC-Audio-Hub/account.html?client=1"
+                    ? "https://locutorcm.github.io/EC-Audio-Hub/account.html?billing=1&switch=1"
+                    : "https://locutorcm.github.io/EC-Audio-Hub/account.html?billing=1"
                 if let url = URL(string: address) {
                     NSWorkspace.shared.open(url)
                 }
             } label: {
                 Label(
-                    library.accountEmail.isEmpty ? "Más opciones · Google y correo" : "Cambiar cuenta · Google y más opciones",
+                    library.accountEmail.isEmpty ? "Más opciones · Google y correo" : "Planes, pagos y cuenta EC Audio",
                     systemImage: "globe"
                 )
                 .frame(maxWidth: .infinity)
