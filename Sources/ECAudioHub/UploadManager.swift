@@ -95,18 +95,23 @@ final class UploadManager: ObservableObject {
                 request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
                 request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
                 request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
-                let (_, response) = try await session.data(for: request)
+                let (deleteData, response) = try await session.data(for: request)
                 guard let http = response as? HTTPURLResponse, http.statusCode == 204 else {
-                    throw UploadError.message("GitHub no pudo eliminar todas las versiones de " + pluginTitle + ".")
+                    let detail = (try? JSONDecoder().decode(GitHubError.self, from: deleteData).message) ?? "HTTP \\((response as? HTTPURLResponse)?.statusCode ?? 0)"
+                    throw UploadError.message("No se pudo borrar la versión \\(target.tagName): \\(detail). Revisa que el token tenga permiso Contents: Read and write.")
                 }
-                let encodedTag = target.tagName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? target.tagName
-                let tagURL = URL(string: api + "/repos/" + repositoryOwner + "/" + repositoryName + "/git/refs/tags/" + encodedTag)!
-                var tagRequest = URLRequest(url: tagURL)
-                tagRequest.httpMethod = "DELETE"
-                tagRequest.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
-                tagRequest.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-                tagRequest.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
-                _ = try? await session.data(for: tagRequest)
+
+                // GitHub no elimina la etiqueta al borrar el release; se intenta por separado.
+                var tagComponents = URLComponents(string: api + "/repos/" + repositoryOwner + "/" + repositoryName + "/git/refs/tags/" + target.tagName)!
+                tagComponents.percentEncodedPath = tagComponents.path.replacingOccurrences(of: target.tagName, with: target.tagName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? target.tagName)
+                if let tagURL = tagComponents.url {
+                    var tagRequest = URLRequest(url: tagURL)
+                    tagRequest.httpMethod = "DELETE"
+                    tagRequest.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
+                    tagRequest.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+                    tagRequest.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+                    _ = try? await session.data(for: tagRequest)
+                }
             }
             status = pluginTitle + " y todas sus versiones fueron eliminadas."
             await refreshReleases()
