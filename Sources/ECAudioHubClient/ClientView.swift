@@ -298,7 +298,7 @@ struct ClientView: View {
             Spacer()
             if isBusy {
                 ProgressView().controlSize(.small).padding(.horizontal, 12)
-            } else if !library.subscriptionActive {
+            } else if library.isLicenseEnforcementEnabled && !library.subscriptionActive {
                 Button("Activar licencia") { showAccountSheet = true }
                     .buttonStyle(BlueButtonStyle())
             } else if isCurrent {
