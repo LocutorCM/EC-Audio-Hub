@@ -18,6 +18,7 @@ final class ClientLibrary: ObservableObject {
     private let repository = "EC-Audio-Hub"
     private let installedKey = "ECAudioHubClient.installedVersions"
     private let installedPathsKey = "ECAudioHubClient.installedPaths"
+    private let catalogETagKey = "ECAudioHubClient.catalogETag"
 
     init() {
         installedVersions = UserDefaults.standard.dictionary(forKey: installedKey) as? [String: String] ?? [:]
@@ -52,12 +53,26 @@ final class ClientLibrary: ObservableObject {
             var request = URLRequest(url: URL(string: "https://api.github.com/repos/\(owner)/\(repository)/releases?per_page=100")!)
             request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
             request.setValue("EC-Audio-Hub-Client", forHTTPHeaderField: "User-Agent")
-            request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+            if let etag = UserDefaults.standard.string(forKey: catalogETagKey) {
+                request.setValue(etag, forHTTPHeaderField: "If-None-Match")
+            }
             request.timeoutInterval = 30
 
             let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            guard let http = response as? HTTPURLResponse else {
                 throw URLError(.badServerResponse)
+            }
+            // GitHub responde 304 cuando el catálogo no ha cambiado. Las peticiones
+            // condicionales evitan consumir el límite normal de consultas repetidas.
+            if http.statusCode == 304 {
+                status = "\(plugins.count) plugin(s) disponibles · Sin cambios."
+                return
+            }
+            guard (200...299).contains(http.statusCode) else {
+                throw URLError(.badServerResponse)
+            }
+            if let etag = http.value(forHTTPHeaderField: "ETag") {
+                UserDefaults.standard.set(etag, forKey: catalogETagKey)
             }
 
             let releases = try JSONDecoder().decode([GitHubRelease].self, from: data)
