@@ -42,7 +42,7 @@ struct HubView: View {
                 releaseToDelete = nil
             }
             Button("Cancelar", role: .cancel) { releaseToDelete = nil }
-        } message: { Text("Se eliminará el Release y todos sus archivos. Esta acción no se puede deshacer.") }
+        } message: { Text("Se eliminarán todas las versiones de este plugin y sus archivos de GitHub. Esta acción no se puede deshacer.") }
         .alert("EC Audio Hub", isPresented: Binding(get: { uploader.errorMessage != nil }, set: { if !$0 { uploader.errorMessage = nil } })) {
             Button("Aceptar", role: .cancel) { uploader.errorMessage = nil }
         } message: { Text(uploader.errorMessage ?? "") }
