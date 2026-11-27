@@ -7,57 +7,62 @@ on:
       - ".github/workflows/macos.yml"
   workflow_dispatch:
 
-jobs:
-  build:
-    name: Build ${{ matrix.arch }}
-    runs-on: macos-14
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x86_64
-            triple: x86_64-apple-macosx12.0
-          - arch: arm64
-            triple: arm64-apple-macosx12.0
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build
-        working-directory: macOS
-        run: |
-          swift --version
-          swift build -c release --triple "${{ matrix.triple }}"
-          BIN_DIR="$(swift build -c release --triple "${{ matrix.triple }}" --show-bin-path)"
-          mkdir -p "../build/${{ matrix.arch }}"
-          cp "$BIN_DIR/ECAudioHub" "../build/${{ matrix.arch }}/ECAudioHub"
-      - name: Upload architecture build
-        uses: actions/upload-artifact@v4
-        with:
-          name: hub-${{ matrix.arch }}
-          path: build/${{ matrix.arch }}/ECAudioHub
+permissions:
+  contents: read
 
-  package:
-    needs: build
+concurrency:
+  group: ec-audio-hub-macos
+  cancel-in-progress: false
+
+jobs:
+  build-and-package:
+    name: Build universal macOS app
     runs-on: macos-14
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: hub-x86_64
-          path: build/x86_64
-      - uses: actions/download-artifact@v4
-        with:
-          name: hub-arm64
-          path: build/arm64
-      - name: Create universal app bundle
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
         run: |
+          sw_vers
+          swift --version
+          xcodebuild -version
+
+      - name: Build Intel and Apple Silicon binaries
+        working-directory: macOS
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          X86_BIN="$(swift build -c release --triple x86_64-apple-macosx12.0 --show-bin-path)"
+          ARM_BIN="$(swift build -c release --triple arm64-apple-macosx12.0 --show-bin-path)"
+
+          test -x "$X86_BIN/ECAudioHub"
+          test -x "$ARM_BIN/ECAudioHub"
+
+          mkdir -p ../build/universal
+          lipo -create \
+            "$X86_BIN/ECAudioHub" \
+            "$ARM_BIN/ECAudioHub" \
+            -output ../build/universal/ECAudioHub
+
+          lipo -info ../build/universal/ECAudioHub
+
+      - name: Create macOS application bundle
+        shell: bash
+        run: |
+          set -euo pipefail
           APP="EC Audio Hub.app"
           mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-          lipo -create build/x86_64/ECAudioHub build/arm64/ECAudioHub -output "$APP/Contents/MacOS/ECAudioHub"
-          chmod +x "$APP/Contents/MacOS/ECAudioHub"
+          cp build/universal/ECAudioHub "$APP/Contents/MacOS/ECAudioHub"
+          chmod 755 "$APP/Contents/MacOS/ECAudioHub"
+
           cat > "$APP/Contents/Info.plist" <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0"><dict>
+          <plist version="1.0">
+          <dict>
             <key>CFBundleName</key><string>EC Audio Hub</string>
             <key>CFBundleDisplayName</key><string>EC Audio Hub</string>
             <key>CFBundleIdentifier</key><string>com.ecaudio.hub</string>
@@ -67,12 +72,27 @@ jobs:
             <key>CFBundleVersion</key><string>1</string>
             <key>LSMinimumSystemVersion</key><string>12.0</string>
             <key>NSHighResolutionCapable</key><true/>
-          </dict></plist>
+            <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
+          </dict>
+          </plist>
           PLIST
+
+          printf 'APPL????' > "$APP/Contents/PkgInfo"
           codesign --force --deep --sign - "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
           ditto -c -k --sequesterRsrc --keepParent "$APP" "EC-Audio-Hub-macOS-Universal.zip"
-          lipo -info "$APP/Contents/MacOS/ECAudioHub"
-      - uses: actions/upload-artifact@v4
+
+      - name: Verify package
+        run: |
+          set -euo pipefail
+          test -s "EC-Audio-Hub-macOS-Universal.zip"
+          unzip -l "EC-Audio-Hub-macOS-Universal.zip"
+          lipo -info "EC Audio Hub.app/Contents/MacOS/ECAudioHub"
+
+      - name: Upload universal app
+        uses: actions/upload-artifact@v4
         with:
           name: EC-Audio-Hub-macOS-Universal
           path: EC-Audio-Hub-macOS-Universal.zip
+          if-no-files-found: error
+          retention-days: 14
