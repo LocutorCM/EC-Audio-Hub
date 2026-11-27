@@ -99,7 +99,12 @@ struct HubView: View {
                     Text("Puedes seleccionar una carpeta VST3/AU; se comprimirá en ZIP.").font(.system(size: 10)).foregroundColor(.secondary)
                 }.frame(maxWidth: .infinity).frame(height: 155).background(panel)
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.13), style: StrokeStyle(lineWidth: 1, dash: [6, 5]))).cornerRadius(12)
-            }.buttonStyle(.plain).disabled(uploader.isUploading)
+            }
+            .buttonStyle(.plain)
+            .disabled(uploader.isUploading)
+            .onDrop(of: [UTType.fileURL], isTargeted: nil) { providers in
+                handleFileDrop(providers)
+            }
             HStack(spacing: 10) {
                 Button { chooseArtwork() } label: {
                     Label(uploader.selectedArtwork?.lastPathComponent ?? "Añadir imagen ilustrativa", systemImage: "photo")
@@ -148,6 +153,26 @@ struct HubView: View {
             }
             Spacer(minLength: 0)
         }.padding(32).frame(maxWidth: 680).frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func handleFileDrop(_ providers: [NSItemProvider]) -> Bool {
+        guard !uploader.isUploading,
+              let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }) else {
+            return false
+        }
+        provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+            let url: URL?
+            if let value = item as? URL {
+                url = value
+            } else if let data = item as? Data {
+                url = URL(dataRepresentation: data, relativeTo: nil)
+            } else {
+                url = nil
+            }
+            guard let url else { return }
+            Task { @MainActor in uploader.selectFile(url) }
+        }
+        return true
     }
 
     private func label(_ text: String) -> some View {
