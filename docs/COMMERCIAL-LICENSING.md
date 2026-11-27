@@ -24,7 +24,7 @@ Los importes no están fijados en el código: utiliza los precios que decidas pa
 ## 2. Publicar EC Audio Cloud API
 
 1. Entra a Render y conecta el repositorio LocutorCM/EC-Audio-Hub.
-2. Crea un Blueprint desde el archivo render.yaml de la rama feature/commercial-licensing-stripe.
+2. Crea un Blueprint desde el archivo render.yaml de la rama main.
 3. El servicio se llama ec-audio-cloud. El Blueprint usa el plan Starter y un disco persistente de 1 GB; Render puede cobrar por ambos.
 4. Configura las variables privadas que Render solicite:
    - ADMIN_EMAIL: correo de administración.
