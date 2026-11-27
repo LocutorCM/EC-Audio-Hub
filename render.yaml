@@ -25,5 +25,9 @@ services:
         sync: false
       - key: CORS_ORIGINS
         value: https://locutorcm.github.io
+      - key: FIREBASE_API_KEY
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        value: ec-audio-accounts
       - key: MAX_UPLOAD_GB
         value: "2"
