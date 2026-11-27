@@ -38,7 +38,7 @@ services:
       - key: KOFI_CURRENCY
         value: MXN
       - key: KOFI_MONTHLY_AMOUNT
-        sync: false
+        value: "0"
       - key: CUSTOMER_WEB_URL
         value: https://locutorcm.github.io/EC-Audio-Hub
       - key: MAX_ACTIVE_DEVICES
