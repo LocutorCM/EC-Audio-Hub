@@ -3,6 +3,7 @@ import SwiftUI
 struct ClientView: View {
     @EnvironmentObject private var library: ClientLibrary
     @State private var selectedSection = "Biblioteca"
+    @State private var pluginToUninstall: String?
 
     private let navy = Color(hex: 0x0B1424)
     private let panel = Color(hex: 0x14243A)
@@ -41,8 +42,27 @@ struct ClientView: View {
         } message: {
             Text(library.errorMessage ?? "")
         }
+        .confirmationDialog("Desinstalar plugin", isPresented: Binding(
+            get: { pluginToUninstall != nil },
+            set: { if !$0 { pluginToUninstall = nil } }
+        ), titleVisibility: .visible) {
+            Button("Desinstalar", role: .destructive) {
+                if let name = pluginToUninstall {
+                    do { try library.uninstallPlugin(named: name) }
+                    catch { library.errorMessage = error.localizedDescription }
+                }
+                pluginToUninstall = nil
+            }
+            Button("Cancelar", role: .cancel) { pluginToUninstall = nil }
+        } message: {
+            Text("Se eliminarán los archivos AU/VST3 de la carpeta de plugins de tu usuario.")
+        }
         .task {
-            if library.plugins.isEmpty { await library.refresh() }
+            await library.refresh()
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 45_000_000_000)
+                if !Task.isCancelled { await library.refresh() }
+            }
         }
     }
 
@@ -244,9 +264,17 @@ struct ClientView: View {
                 ForEach(library.installedVersions.keys.sorted(), id: \.self) { name in
                     HStack {
                         Image(systemName: "checkmark.seal.fill").foregroundColor(.green)
-                        Text(name).font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(name).font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                            Text("Versión \(library.installedVersions[name] ?? "")").font(.system(size: 10)).foregroundColor(.secondary)
+                        }
                         Spacer()
-                        Text("Versión \(library.installedVersions[name] ?? "")").font(.system(size: 10)).foregroundColor(.secondary)
+                        Button("Desinstalar") { pluginToUninstall = name }
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(Color(hex: 0xFF9B9B))
+                            .padding(.horizontal, 11).padding(.vertical, 7)
+                            .background(Color.red.opacity(0.12)).cornerRadius(7)
+                            .buttonStyle(.plain)
                     }
                     .padding(15).background(panel).cornerRadius(10)
                 }
