@@ -501,6 +501,42 @@ final class ClientLibrary: ObservableObject {
         }
     }
 
+    func handleAuthenticationCallback(_ url: URL) async {
+        guard url.scheme == "ecaudiohub", url.host == "auth",
+              let fragment = url.fragment,
+              let components = URLComponents(string: "https://callback.invalid/?"+fragment),
+              let token = components.queryItems?.first(where: { $0.name == "idToken" })?.value,
+              !token.isEmpty else {
+            accountMessage = "No se pudo validar el regreso del navegador. Intenta iniciar sesión otra vez."
+            return
+        }
+        let email = components.queryItems?.first(where: { $0.name == "email" })?.value ?? ""
+        await authenticateCustomer(firebaseIDToken: token, email: email)
+    }
+
+    func authenticateCustomer(firebaseIDToken: String, email: String) async {
+        guard !isAccountBusy else { return }
+        guard !apiBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            accountMessage = "Firebase confirmó tu acceso, pero falta publicar el servidor de licencias EC Audio para completar la sincronización."
+            return
+        }
+        isAccountBusy = true
+        defer { isAccountBusy = false }
+        do {
+            let exchangeBody = try JSONSerialization.data(withJSONObject: ["idToken": firebaseIDToken])
+            let session: CustomerSessionDTO = try await customerRequest(
+                "/api/customer/auth/firebase", method: "POST", body: exchangeBody, responseType: CustomerSessionDTO.self
+            )
+            customerToken = session.token
+            accountEmail = session.user.email.isEmpty ? email : session.user.email
+            UserDefaults.standard.set(accountEmail, forKey: "ECAudioHubClient.accountEmail")
+            applySubscription(session.subscription)
+            accountMessage = "Sesión sincronizada con tu cuenta EC Audio."
+        } catch {
+            accountMessage = error.localizedDescription
+        }
+    }
+
     func activateTrial() async {
         guard !isAccountBusy else { return }
         isAccountBusy = true

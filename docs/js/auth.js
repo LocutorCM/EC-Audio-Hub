@@ -24,6 +24,8 @@ const accountPanel = $("accountPanel");
 const message = $("message");
 let mode = "login";
 let busy = false;
+// En modo de cambio de cuenta, no enviar automáticamente la sesión anterior al Client Hub.
+let waitingForExplicitSignIn = new URLSearchParams(window.location.search).get("switch") === "1";
 
 function say(text, kind = "") {
   if (!message) return;
@@ -137,6 +139,7 @@ $("authForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   if (busy) return;
   say("");
+  waitingForExplicitSignIn = false;
   setBusy(true);
   try {
     const email = $("email").value.trim();
@@ -162,6 +165,7 @@ $("authForm").addEventListener("submit", async (event) => {
 $("googleBtn").addEventListener("click", async () => {
   if (busy) return;
   say("");
+  waitingForExplicitSignIn = false;
   setBusy(true);
   try {
     const credential = await signInWithPopup(auth, googleProvider);
@@ -199,9 +203,28 @@ $("signoutBtn").addEventListener("click", async () => {
   }
 });
 
+function returnToNativeClient(user) {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("client") !== "1") return false;
+  user.getIdToken().then((idToken) => {
+    const callback = "ecaudiohub://auth#" + new URLSearchParams({
+      idToken,
+      email: user.email || "",
+      displayName: user.displayName || ""
+    }).toString();
+    window.location.href = callback;
+  }).catch((error) => say(friendlyError(error), "error"));
+  return true;
+}
+
 onAuthStateChanged(auth, async (user) => {
   if (user) {
+    if (waitingForExplicitSignIn) {
+      showSignedOut();
+      return;
+    }
     showUser(user);
+    if (returnToNativeClient(user)) return;
     await syncCustomerSession(user);
   } else showSignedOut();
 });
