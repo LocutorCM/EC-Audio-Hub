@@ -347,8 +347,8 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
       return res.status(200).json({ received: true, duplicate: true });
     }
     try {
-      const isMembershipPayment = payload?.is_subscription_payment === true ||
-        payload?.is_subscription_payment === 'true';
+      const isMembershipPayment = String(payload?.type || '') === 'Subscription' &&
+        (payload?.is_subscription_payment === true || payload?.is_subscription_payment === 'true');
       const tierName = String(payload?.tier_name || '').trim();
       const currency = String(payload?.currency || '').toUpperCase();
       const amount = Number(payload?.amount);
