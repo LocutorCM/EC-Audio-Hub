@@ -199,9 +199,24 @@ $("signoutBtn").addEventListener("click", async () => {
   }
 });
 
+function returnToNativeClient(user) {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("client") !== "1") return false;
+  user.getIdToken().then((idToken) => {
+    const callback = "ecaudiohub://auth#" + new URLSearchParams({
+      idToken,
+      email: user.email || "",
+      displayName: user.displayName || ""
+    }).toString();
+    window.location.href = callback;
+  }).catch((error) => say(friendlyError(error), "error"));
+  return true;
+}
+
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     showUser(user);
+    if (returnToNativeClient(user)) return;
     await syncCustomerSession(user);
   } else showSignedOut();
 });
