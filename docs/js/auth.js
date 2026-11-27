@@ -197,7 +197,7 @@ async function startKofiMembership() {
     });
     const payload = await response.json();
     if (!response.ok || !payload.code || !payload.url) throw new Error(payload.error || "No se pudo preparar el enlace de Ko-fi.");
-    $("billingNotice").textContent = "IMPORTANTE: copia este código y pégalo en el mensaje de tu primera membresía en Ko-fi: " + payload.code + ". El código vence en 24 horas. Después de pagar, el servidor vinculará tu cuenta y activará la licencia.";
+    $("billingNotice").textContent = "Si pagas con un correo diferente al de tu cuenta EC Audio, copia este código y pégalo en el mensaje público de tu primera membresía en Ko-fi: " + payload.code + ". El código vence en 24 horas. Si usas el mismo correo en ambas cuentas, la vinculación se realiza automáticamente. Después de pagar, el servidor activará la licencia.";
     window.open(payload.url, "_blank", "noopener,noreferrer");
   } catch (error) {
     say(error.message || "No se pudo abrir Ko-fi.", "error");
