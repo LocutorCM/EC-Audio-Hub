@@ -82,7 +82,7 @@ final class ClientLibrary: ObservableObject {
                     downloadURL: asset.browserDownloadURL,
                     size: asset.size,
                     releaseNotes: release.body ?? "",
-                    imageURL: metadata["image_url"].flatMap(URL.init(string:)) ?? metadata["image_file"].flatMap { imageName in release.assets.first(where: { $0.name == imageName })?.browserDownloadURL }
+                    imageURL: metadata["image_url"].flatMap({ URL(string: $0) }) ?? metadata["image_file"].flatMap { imageName in release.assets.first(where: { $0.name == imageName })?.browserDownloadURL }
                 ))
             }
 
@@ -288,7 +288,7 @@ enum ClientInstallError: LocalizedError {
         case .checksumMismatch: return "La verificación SHA-256 no coincide. El archivo se rechazó por seguridad."
         case .archiveExtractionFailed: return "No se pudo extraer el ZIP."
         case .noPluginBundle: return "El ZIP no contiene un paquete AU (.component) o VST3 (.vst3)."
-        case .installedBundleNotFound(let name): return "No encontré los archivos instalados de \\(name). Comprueba el nombre del bundle del plugin."
+        case .installedBundleNotFound(let name): return "No encontré los archivos instalados de \(name). Comprueba el nombre del bundle del plugin."
         }
     }
 }
