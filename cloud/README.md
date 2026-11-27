@@ -1,34 +1,20 @@
-# EC Audio Cloud
+# EC Audio Cloud — self-hosted
 
-Cloud source for the EC Audio Hub owner console and customer catalog.
+This project uses its own server. It does **not** depend on AppDeploy.
 
-## Architecture
-- **Owner console:** authenticated AppDeploy account with the platform's automatic `owner` role. All write endpoints require `requireAuth()` and `requireRole('admin')`; the owner inherits admin access.
-- **Customer library:** signed-in customers can read only published releases and request signed download URLs.
-- **Private installer storage:** installer bytes are uploaded in 450 KiB chunks to private AppDeploy storage. Metadata is kept in the app database; installers are not exposed as public static files.
-- **Live catalog:** clients subscribe to the `catalog/main` entity over WebSockets. Admin changes send `entity.update` events.
-- **Large downloads:** the client retrieves short-lived signed URLs for each chunk and assembles the original file locally.
+The backend and owner console are in [server/](server/README.md).
 
-## Source layout
-- `backend/index.ts`: API, role checks, uploads, release CRUD, signed downloads, realtime subscriptions.
-- `backend/realtime.ts`: removes dead subscriptions when sockets disconnect.
-- `src/App.tsx`: owner and customer web experience.
-- `src/index.css`: EC Audio visual system.
+## Components
+- **Owner console:** upload installers, edit release details, publish/hide plugins, create and suspend customer accounts.
+- **Customer macOS app:** read-only catalog, authenticated downloads, local installer cache.
+- **Server:** Node.js API, SQLite metadata database, private installer storage, JWT sessions, WebSocket notifications.
 
-## Publishing workflow
-1. Owner signs in with the same verified email as the AppDeploy app owner.
-2. Owner adds plugin details and selects the installer.
-3. Browser sends 450 KiB chunks; server stores them privately.
-4. Publish creates or updates a release record and broadcasts a catalog event.
-5. Customers see published changes live and download via signed URLs.
-
-## Security boundaries
-- Never trust client-side role flags. Backend write routes use server-side role middleware.
-- Customer catalog and download endpoints require authentication.
-- Draft/unpublished releases are omitted from customer catalog and cannot be downloaded.
-- Download URLs are signed and short-lived.
-- Delete hides a release; it does not erase historical installer bytes.
-- AppDeploy platform authentication, database, storage and realtime services are required.
+## Hybrid behavior
+- The client saves the catalog metadata locally.
+- Downloaded installers are stored in Application Support and can be opened offline.
+- New installers and first-time login require internet.
+- The client refreshes periodically and reacts to live catalog change events.
+- When offline, the app continues to show its last synced catalog and identifies installers already cached on that Mac.
 
 ## Deployment
-Deploy this source as an AppDeploy **frontend + backend** React/Vite app with realtime enabled. The AppDeploy account used for deployment must have an active deployment window. This repository contains source only; no live endpoint is configured until deployment succeeds.
+Follow [server/README.md](server/README.md). Deploy on a VPS/server you control, configure the environment variables, and place a TLS reverse proxy in front of the app. The server is not live until you deploy it and set a public HTTPS domain.
