@@ -83,23 +83,29 @@ final class UploadManager: ObservableObject {
     func deleteRelease(_ release: AdminRelease) async {
         guard let token else { errorMessage = "Conecta GitHub primero."; return }
         do {
-            var request = URLRequest(url: URL(string: "\(api)/repos/\(repositoryOwner)/\(repositoryName)/releases/\(release.id)")!)
-            request.httpMethod = "DELETE"
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-            request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
-            let (_, response) = try await session.data(for: request)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 204 else {
-                throw UploadError.message("GitHub no pudo eliminar esta publicación.")
+            let pluginTitle = (release.name ?? release.tagName).components(separatedBy: " · v").first ?? release.tagName
+            let targets = releases.filter { (($0.name ?? $0.tagName).components(separatedBy: " · v").first ?? $0.tagName) == pluginTitle }
+            for target in targets {
+                let releaseURL = URL(string: api + "/repos/" + repositoryOwner + "/" + repositoryName + "/releases/" + String(target.id))!
+                var request = URLRequest(url: releaseURL)
+                request.httpMethod = "DELETE"
+                request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
+                request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+                request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+                let (_, response) = try await session.data(for: request)
+                guard let http = response as? HTTPURLResponse, http.statusCode == 204 else {
+                    throw UploadError.message("GitHub no pudo eliminar todas las versiones de " + pluginTitle + ".")
+                }
+                let encodedTag = target.tagName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? target.tagName
+                let tagURL = URL(string: api + "/repos/" + repositoryOwner + "/" + repositoryName + "/git/refs/tags/" + encodedTag)!
+                var tagRequest = URLRequest(url: tagURL)
+                tagRequest.httpMethod = "DELETE"
+                tagRequest.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
+                tagRequest.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+                tagRequest.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+                _ = try? await session.data(for: tagRequest)
             }
-            // Remove the associated tag too, so the same plugin version can be published again.
-            var tagRequest = URLRequest(url: URL(string: "\(api)/repos/\(repositoryOwner)/\(repositoryName)/git/refs/tags/\(release.tagName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? release.tagName)")!)
-            tagRequest.httpMethod = "DELETE"
-            tagRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            tagRequest.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-            tagRequest.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
-            _ = try? await session.data(for: tagRequest)
-            status = "Publicación y etiqueta eliminadas."
+            status = pluginTitle + " y todas sus versiones fueron eliminadas."
             await refreshReleases()
         } catch { errorMessage = error.localizedDescription }
     }
