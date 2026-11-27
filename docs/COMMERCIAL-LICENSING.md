@@ -14,9 +14,9 @@
 ## 1. Configurar la membresía de Ko-fi
 
 1. Abre [Ko-fi EC Audio](https://ko-fi.com/ecaudio).
-2. Configura un nivel de membresía mensual para EC Audio.
-3. Anota el nombre exacto del nivel (incluyendo mayúsculas, espacios y símbolos).
-4. Decide el importe y la moneda de la membresía. Ko-fi admite USD, EUR, GBP, AUD, BRL, CAD, JPY, SGD, THB y NZD; no ofrece MXN. El servidor está preparado para validar USD y, si configuras `KOFI_MONTHLY_AMOUNT`, también el importe exacto.
+2. Crea un nivel de membresía mensual llamado exactamente **`EC Audio $1`**.
+3. Establece el precio mínimo en **1 USD al mes**. Ko-fi permite que un miembro aporte más que el mínimo del nivel, pero el plan base es de 1 USD.
+4. La moneda debe ser USD. Ko-fi admite USD, EUR, GBP, AUD, BRL, CAD, JPY, SGD, THB y NZD; no ofrece MXN.
 5. En Ko-fi abre Settings > Payments > Webhooks y configura la URL del webhook cuando Render esté publicado.
 
 Ko-fi no proporciona al webhook eventos de cancelación o fin de membresía. Por eso EC Audio no intenta consultar una cancelación: cada pago renueva 32 días y la licencia caduca si no llega el siguiente pago. Ko-fi documenta el webhook y sus limitaciones en [su centro de ayuda](https://help.ko-fi.com/hc/en-us/articles/360004162298-Does-Ko-fi-have-an-API-or-webhook).
