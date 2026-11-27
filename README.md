@@ -14,7 +14,7 @@ EC Audio Hub es la plataforma de distribución, cuentas y licencias para los plu
 
 ## Licencias y pagos
 
-El sistema comercial integra membresías mensuales de Ko-fi. El servidor confirma las licencias únicamente a partir de webhooks validados de Ko-fi y de un código de vinculación de un solo uso; los clientes nunca pueden escribir una licencia comercial directamente.
+El sistema comercial integra membresías mensuales de Ko-fi. El servidor confirma las licencias únicamente a partir de webhooks validados de Ko-fi y vinculación segura por correo o código de un solo uso; los clientes nunca pueden escribir una licencia comercial directamente.
 
 Incluye:
 - Membresía mensual de Ko-fi y renovación automática de licencias al recibir cada pago.
@@ -29,7 +29,7 @@ La prueba gratuita existente continúa siendo una demostración técnica de 60 s
 
 Sigue docs/COMMERCIAL-LICENSING.md. El backend necesita un servicio HTTPS persistente (el Blueprint de Render utiliza el plan Starter y un disco persistente), una cuenta Ko-fi y el token secreto del webhook configurado como variable privada del servidor.
 
-**Estado:** el código está integrado en main. Todavía no hay un servidor de pagos publicado ni se ha conectado el webhook de Ko-fi. La validación de licencia dentro de cada plugin cuando se carga en Logic Pro todavía requiere integrar el SDK de licencia en el código fuente de cada plugin. No vendas licencias hasta completar la configuración, esa integración y las pruebas de webhooks.
+**Estado:** la adaptación está preparada en la rama feature/kofi-commercial-licensing y en revisión en el PR #5; todavía no está integrada en main. No hay un servidor de pagos publicado ni se ha conectado el webhook de Ko-fi. La validación de licencia dentro de cada plugin cuando se carga en Logic Pro todavía requiere integrar el SDK de licencia en el código fuente de cada plugin. No vendas licencias hasta completar la configuración, esa integración y las pruebas de webhooks.
 
 ## Compilar apps macOS
 
