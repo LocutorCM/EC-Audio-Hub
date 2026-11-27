@@ -89,6 +89,18 @@ final class ClientLibrary: ObservableObject {
 
                 let pluginName = metadata["plugin_name"] ?? release.name ?? release.tagName
                 let version = metadata["version"] ?? release.tagName
+                // Busca la portada por nombre indicado en los metadatos y, como
+                // respaldo, detecta automáticamente cualquier imagen adjunta al release.
+                let imageAsset = metadata["image_file"].flatMap { imageName in
+                    release.assets.first(where: { $0.name.caseInsensitiveCompare(imageName) == .orderedSame })
+                } ?? release.assets.first(where: {
+                    ["png", "jpg", "jpeg", "webp"].contains(URL(fileURLWithPath: $0.name).pathExtension.lowercased())
+                })
+                let metadataImageURL = metadata["image_url"].flatMap { rawValue -> URL? in
+                    URL(string: rawValue.trimmingCharacters(in: .whitespacesAndNewlines))
+                }
+                let artworkURL = metadataImageURL ?? imageAsset?.browserDownloadURL
+
                 found.append(HubPlugin(
                     id: release.tagName + ":" + asset.name,
                     name: pluginName,
@@ -98,7 +110,7 @@ final class ClientLibrary: ObservableObject {
                     downloadURL: asset.browserDownloadURL,
                     size: asset.size,
                     releaseNotes: release.body ?? "",
-                    imageURL: metadata["image_url"].flatMap({ URL(string: $0) }) ?? metadata["image_file"].flatMap { imageName in release.assets.first(where: { $0.name == imageName })?.browserDownloadURL }
+                    imageURL: artworkURL
                 ))
             }
 
