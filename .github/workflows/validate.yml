@@ -24,7 +24,7 @@ jobs:
       - run: node --check src/customer-accounts.js
 
   macos-client:
-    runs-on: macos-14
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
       - name: Build Client Hub
