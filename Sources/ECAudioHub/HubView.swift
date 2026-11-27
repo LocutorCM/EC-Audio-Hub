@@ -3,7 +3,6 @@ import AppKit
 
 struct HubView: View {
     @EnvironmentObject private var uploader: UploadManager
-    @State private var isFileHovering = false
 
     private let background = Color(red: 0.055, green: 0.067, blue: 0.09)
     private let panel = Color(red: 0.105, green: 0.125, blue: 0.16)
@@ -39,8 +38,8 @@ struct HubView: View {
                 Image(systemName: "waveform").font(.system(size: 21, weight: .bold)).foregroundColor(.white)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text("EC AUDIO").font(.system(size: 15, weight: .black, design: .rounded)).tracking(1.8)
-                Text("HUB  /  ADMIN UPLOADER").font(.system(size: 9, weight: .bold, design: .monospaced)).tracking(1.5).foregroundColor(orange)
+                Text("EC AUDIO").font(.system(size: 15, weight: .black, design: .rounded)).kerning(1.8)
+                Text("HUB  /  ADMIN UPLOADER").font(.system(size: 9, weight: .bold, design: .monospaced)).kerning(1.5).foregroundColor(orange)
             }
             Spacer()
             if uploader.isAuthenticated {
@@ -60,7 +59,7 @@ struct HubView: View {
         VStack(alignment: .leading, spacing: 18) {
             Spacer()
             VStack(alignment: .leading, spacing: 7) {
-                Text("PANEL PRIVADO").font(.system(size: 10, weight: .bold, design: .monospaced)).tracking(2).foregroundColor(orange)
+                Text("PANEL PRIVADO").font(.system(size: 10, weight: .bold, design: .monospaced)).kerning(2).foregroundColor(orange)
                 Text("Iniciar sesión").font(.system(size: 27, weight: .bold, design: .rounded))
                 Text("Acceso exclusivo para administrar y subir archivos a EC Audio Cloud.")
                     .font(.system(size: 13)).foregroundColor(.secondary)
@@ -100,7 +99,7 @@ struct HubView: View {
     private var uploadWorkspace: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 5) {
-                Text("DISTRIBUCIÓN PRIVADA").font(.system(size: 10, weight: .bold, design: .monospaced)).tracking(2).foregroundColor(orange)
+                Text("DISTRIBUCIÓN PRIVADA").font(.system(size: 10, weight: .bold, design: .monospaced)).kerning(2).foregroundColor(orange)
                 Text("Subir archivos").font(.system(size: 27, weight: .bold, design: .rounded))
                 Text("Selecciona un archivo de plugin o instalador y súbelo al almacenamiento privado.")
                     .font(.system(size: 13)).foregroundColor(.secondary)
@@ -152,7 +151,7 @@ struct HubView: View {
                     else { Image(systemName: "icloud.and.arrow.up.fill") }
                     Text(uploader.isUploading ? "Subiendo archivo…" : "SUBIR ARCHIVO AL SERVIDOR")
                 }
-                .font(.system(size: 12, weight: .bold)).tracking(0.5)
+                .font(.system(size: 12, weight: .bold)).kerning(0.5)
                 .frame(maxWidth: .infinity).padding(14)
                 .background(uploader.selectedFile == nil || uploader.isUploading ? Color.gray.opacity(0.25) : orange)
                 .foregroundColor(.white).cornerRadius(9)
@@ -187,7 +186,7 @@ struct HubView: View {
     }
 
     private func fieldLabel(_ value: String) -> some View {
-        Text(value).font(.system(size: 9, weight: .bold, design: .monospaced)).tracking(1.2).foregroundColor(.secondary)
+        Text(value).font(.system(size: 9, weight: .bold, design: .monospaced)).kerning(1.2).foregroundColor(.secondary)
     }
 
     private func chooseFile() {
