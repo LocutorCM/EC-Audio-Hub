@@ -91,15 +91,21 @@ final class ClientLibrary: ObservableObject {
                 let version = metadata["version"] ?? release.tagName
                 // Busca la portada por nombre indicado en los metadatos y, como
                 // respaldo, detecta automáticamente cualquier imagen adjunta al release.
+                let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "webp", "gif", "bmp", "heic", "tif", "tiff"]
                 let imageAsset = metadata["image_file"].flatMap { imageName in
                     release.assets.first(where: { $0.name.caseInsensitiveCompare(imageName) == .orderedSame })
                 } ?? release.assets.first(where: {
-                    ["png", "jpg", "jpeg", "webp"].contains(URL(fileURLWithPath: $0.name).pathExtension.lowercased())
+                    imageExtensions.contains(URL(fileURLWithPath: $0.name).pathExtension.lowercased())
                 })
                 let metadataImageURL = metadata["image_url"].flatMap { rawValue -> URL? in
-                    URL(string: rawValue.trimmingCharacters(in: .whitespacesAndNewlines))
+                    guard let url = URL(string: rawValue.trimmingCharacters(in: .whitespacesAndNewlines)),
+                          let scheme = url.scheme?.lowercased(), scheme == "https" else { return nil }
+                    return url
                 }
-                let artworkURL = metadataImageURL ?? imageAsset?.browserDownloadURL
+                // Prioriza el enlace del asset adjunto al release: GitHub lo genera
+                // directamente y evita que una URL antigua guardada en los metadatos
+                // impida mostrar la portada actual.
+                let artworkURL = imageAsset?.browserDownloadURL ?? metadataImageURL
 
                 found.append(HubPlugin(
                     id: release.tagName + ":" + asset.name,
