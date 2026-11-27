@@ -14,7 +14,6 @@ final class ClientLibrary: ObservableObject {
     @Published var downloadingIDs: Set<String> = []
     @Published var status = "Conecta con EC Audio Hub para consultar los plugins."
     @Published var errorMessage: String?
-    @Published var apiBaseURL: String { didSet { UserDefaults.standard.set(apiBaseURL, forKey: "ECAudioHubClient.apiBaseURL") } }
     @Published var accountEmail = ""
     @Published var subscriptionStatus = "Sin verificar"
     @Published var subscriptionActive = false
@@ -27,7 +26,9 @@ final class ClientLibrary: ObservableObject {
     private let installedPathsKey = "ECAudioHubClient.installedPaths"
     private let catalogETagKey = "ECAudioHubClient.catalogETag"
     private let suspendedPluginsKey = "ECAudioHubClient.suspendedPlugins"
-    private let customerTokenKey = "com.locutorcm.ECAudioHub.customerToken"
+    private let customerTokenKey = "com.locutorcm.ECAudioHub.firebaseIDToken"
+    private let customerRefreshTokenKey = "com.locutorcm.ECAudioHub.firebaseRefreshToken"
+    private let firebaseUIDKey = "ECAudioHubClient.firebaseUID"
     private let firebaseAPIKey = "AIzaSyCXcjmEv0tdynd0gyKDsZAh4mS998lw5tU"
     private let firebaseProjectID = "ec-audio-accounts"
 
@@ -36,17 +37,17 @@ final class ClientLibrary: ObservableObject {
         let email: String?
         let localId: String
         let displayName: String?
+        let refreshToken: String
     }
 
     init() {
         installedVersions = UserDefaults.standard.dictionary(forKey: installedKey) as? [String: String] ?? [:]
         installedPaths = UserDefaults.standard.dictionary(forKey: installedPathsKey) as? [String: [String]] ?? [:]
-        apiBaseURL = UserDefaults.standard.string(forKey: "ECAudioHubClient.apiBaseURL") ?? ""
         accountEmail = UserDefaults.standard.string(forKey: "ECAudioHubClient.accountEmail") ?? ""
         subscriptionStatus = UserDefaults.standard.string(forKey: "ECAudioHubClient.subscriptionStatus") ?? "Sin verificar"
     }
 
-    var isLicenseEnforcementEnabled: Bool { !apiBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    var isLicenseEnforcementEnabled: Bool { true }
     var isCustomerSignedIn: Bool { customerToken != nil }
 
     var filteredPlugins: [HubPlugin] {
@@ -400,74 +401,141 @@ final class ClientLibrary: ObservableObject {
         }
     }
 
-    private struct CustomerUserDTO: Decodable {
-        let id: String
-        let email: String
-        let displayName: String?
+    private var customerRefreshToken: String? {
+        get { KeychainStore.read(key: customerRefreshTokenKey) }
+        set {
+            if let newValue { KeychainStore.save(newValue, key: customerRefreshTokenKey) }
+            else { KeychainStore.delete(key: customerRefreshTokenKey) }
+        }
     }
-    private struct CustomerSubscriptionDTO: Decodable {
+
+    private struct CustomerSubscriptionDTO {
         let status: String
         let plan: String?
         let active: Bool
         let expiresAt: String?
         let remainingSeconds: Int?
-    }
-    private struct CustomerSessionDTO: Decodable {
-        let token: String
-        let user: CustomerUserDTO
-        let subscription: CustomerSubscriptionDTO
-    }
-    private struct CustomerSubscriptionEnvelope: Decodable {
-        let subscription: CustomerSubscriptionDTO
-    }
-    private struct CustomerActivationDTO: Decodable {
-        let message: String
-        let subscription: CustomerSubscriptionDTO
+        let trialUsed: Bool
     }
 
-    private func customerRequest<T: Decodable>(
+    private func validFirebaseIDToken() async throws -> String {
+        guard let token = customerToken else {
+            throw ClientAccountError.server("Inicia sesión con tu cuenta Firebase.")
+        }
+        let parts = token.split(separator: ".")
+        if parts.count == 3 {
+            var payload = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+            while payload.count % 4 != 0 { payload.append("=") }
+            if let data = Data(base64Encoded: payload),
+               let claims = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let expiry = claims["exp"] as? TimeInterval,
+               expiry > Date().timeIntervalSince1970 + 300 {
+                return token
+            }
+        }
+
+        guard let refresh = customerRefreshToken else { return token }
+        guard let url = URL(string: "https://securetoken.googleapis.com/v1/token?key=\\(firebaseAPIKey)") else {
+            throw ClientAccountError.server("No se pudo preparar la renovación segura de Firebase.")
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        var form = URLComponents()
+        form.queryItems = [
+            URLQueryItem(name: "grant_type", value: "refresh_token"),
+            URLQueryItem(name: "refresh_token", value: refresh)
+        ]
+        request.httpBody = form.percentEncodedQuery?.data(using: .utf8)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let newToken = payload["id_token"] as? String,
+              let newRefresh = payload["refresh_token"] as? String else {
+            throw ClientAccountError.server("La sesión Firebase venció. Vuelve a iniciar sesión.")
+        }
+        customerToken = newToken
+        customerRefreshToken = newRefresh
+        return newToken
+    }
+
+    private func firestoreRequest(
         _ path: String,
         method: String = "GET",
-        body: Data? = nil,
-        responseType: T.Type
-    ) async throws -> T {
-        guard let base = URL(string: apiBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)),
-              base.scheme?.lowercased() == "https",
-              let url = URL(string: path, relativeTo: base)?.absoluteURL else {
-            throw ClientAccountError.apiNotConfigured
-        }
+        body: Data? = nil
+    ) async throws -> (Data, Int) {
+        let base = "https://firestore.googleapis.com/v1/projects/\\(firebaseProjectID)/databases/(default)/documents"
+        guard let url = URL(string: base + path) else { throw ClientAccountError.apiNotConfigured }
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.timeoutInterval = 20
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer " + (try await validFirebaseIDToken()), forHTTPHeaderField: "Authorization")
         if let body {
             request.httpBody = body
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
-        if let token = customerToken {
-            request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
-        }
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-        guard (200...299).contains(http.statusCode) else {
-            let payload = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-            let message = payload?["error"] as? String ?? "El servidor rechazó la solicitud (HTTP \(http.statusCode))."
-            throw ClientAccountError.server(message)
+        return (data, http.statusCode)
+    }
+
+    private func firestoreError(_ data: Data, fallback: String) -> String {
+        let payload = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        let nested = payload?["error"] as? [String: Any]
+        return nested?["message"] as? String ?? payload?["message"] as? String ?? fallback
+    }
+
+    private func fetchCustomerSubscription() async throws -> CustomerSubscriptionDTO {
+        guard let uid = UserDefaults.standard.string(forKey: firebaseUIDKey), !uid.isEmpty else {
+            throw ClientAccountError.server("No se encontró el identificador de tu cuenta Firebase. Inicia sesión nuevamente.")
         }
-        return try JSONDecoder().decode(T.self, from: data)
+        let (data, status) = try await firestoreRequest("/ecAudioSubscriptions/\\(uid)")
+        if status == 404 {
+            return CustomerSubscriptionDTO(
+                status: "inactive", plan: nil, active: false, expiresAt: nil,
+                remainingSeconds: 0, trialUsed: false
+            )
+        }
+        guard (200...299).contains(status) else {
+            throw ClientAccountError.server(firestoreError(data, fallback: "No se pudo consultar la licencia Firebase (HTTP \\(status))."))
+        }
+        guard let document = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let fields = document["fields"] as? [String: Any] else {
+            throw ClientAccountError.server("La respuesta de Firestore no tiene el formato esperado.")
+        }
+        let state = (fields["status"] as? [String: Any])?["stringValue"] as? String ?? "inactive"
+        let plan = (fields["plan"] as? [String: Any])?["stringValue"] as? String
+        let startedAtText = (fields["startedAt"] as? [String: Any])?["timestampValue"] as? String
+        let trialUsed = (fields["trialUsed"] as? [String: Any])?["booleanValue"] as? Bool ?? false
+        let startedAt = startedAtText.flatMap { value -> Date? in
+            let formatter = ISO8601DateFormatter()
+            if let date = formatter.date(from: value) { return date }
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            return formatter.date(from: value)
+        }
+        let expiry = startedAt?.addingTimeInterval(60)
+        let active = state == "active" && (expiry.map { $0 > Date() } ?? false)
+        let expiryText = expiry.map { ISO8601DateFormatter().string(from: $0) }
+        let remaining = active ? max(0, Int(ceil((expiry?.timeIntervalSinceNow ?? 0)))) : 0
+        return CustomerSubscriptionDTO(
+            status: state == "active" && !active ? "expired" : state,
+            plan: plan,
+            active: active,
+            expiresAt: expiryText,
+            remainingSeconds: remaining,
+            trialUsed: trialUsed
+        )
     }
 
     func authenticateCustomer(email: String, password: String, displayName: String, register: Bool) async {
         guard !isAccountBusy else { return }
-        guard !apiBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            accountMessage = "El servidor de cuentas aún no está publicado. Cuando esté disponible, el mismo acceso de la página funcionará aquí."
-            return
-        }
         isAccountBusy = true
         defer { isAccountBusy = false }
         do {
             let action = register ? "signUp" : "signInWithPassword"
-            guard let firebaseURL = URL(string: "https://identitytoolkit.googleapis.com/v1/accounts:\(action)?key=\(firebaseAPIKey)") else {
+            guard let firebaseURL = URL(string: "https://identitytoolkit.googleapis.com/v1/accounts:\\(action)?key=\\(firebaseAPIKey)") else {
                 throw ClientAccountError.server("No se pudo preparar la conexión con Firebase.")
             }
             var firebaseRequest = URLRequest(url: firebaseURL)
@@ -486,16 +554,15 @@ final class ClientLibrary: ObservableObject {
                 let error = (payload?["error"] as? [String: Any])?["message"] as? String ?? "Firebase no pudo iniciar sesión."
                 throw ClientAccountError.server(error.replacingOccurrences(of: "_", with: " "))
             }
-            let firebaseSession = try JSONDecoder().decode(FirebaseAuthDTO.self, from: firebaseData)
-            let exchangeBody = try JSONSerialization.data(withJSONObject: ["idToken": firebaseSession.idToken])
-            let session: CustomerSessionDTO = try await customerRequest(
-                "/api/customer/auth/firebase", method: "POST", body: exchangeBody, responseType: CustomerSessionDTO.self
-            )
-            customerToken = session.token
-            accountEmail = session.user.email
+            let session = try JSONDecoder().decode(FirebaseAuthDTO.self, from: firebaseData)
+            customerToken = session.idToken
+            customerRefreshToken = session.refreshToken
+            UserDefaults.standard.set(session.localId, forKey: firebaseUIDKey)
+            accountEmail = session.email ?? email
             UserDefaults.standard.set(accountEmail, forKey: "ECAudioHubClient.accountEmail")
-            applySubscription(session.subscription)
-            accountMessage = register ? "Cuenta creada y vinculada con EC Audio." : "Sesión iniciada con tu cuenta EC Audio."
+            let subscription = try await fetchCustomerSubscription()
+            applySubscription(subscription)
+            accountMessage = register ? "Cuenta Firebase creada y sincronizada con EC Audio." : "Sesión iniciada y sincronizada con EC Audio."
         } catch {
             accountMessage = error.localizedDescription
         }
@@ -504,34 +571,31 @@ final class ClientLibrary: ObservableObject {
     func handleAuthenticationCallback(_ url: URL) async {
         guard url.scheme == "ecaudiohub", url.host == "auth",
               let fragment = url.fragment,
-              let components = URLComponents(string: "https://callback.invalid/?"+fragment),
+              let components = URLComponents(string: "https://callback.invalid/?" + fragment),
               let token = components.queryItems?.first(where: { $0.name == "idToken" })?.value,
               !token.isEmpty else {
             accountMessage = "No se pudo validar el regreso del navegador. Intenta iniciar sesión otra vez."
             return
         }
         let email = components.queryItems?.first(where: { $0.name == "email" })?.value ?? ""
-        await authenticateCustomer(firebaseIDToken: token, email: email)
+        let uid = components.queryItems?.first(where: { $0.name == "uid" })?.value ?? ""
+        let refreshToken = components.queryItems?.first(where: { $0.name == "refreshToken" })?.value ?? ""
+        await authenticateCustomer(firebaseIDToken: token, email: email, uid: uid, refreshToken: refreshToken)
     }
 
-    func authenticateCustomer(firebaseIDToken: String, email: String) async {
+    func authenticateCustomer(firebaseIDToken: String, email: String, uid: String, refreshToken: String) async {
         guard !isAccountBusy else { return }
-        guard !apiBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            accountMessage = "Firebase confirmó tu acceso, pero falta publicar el servidor de licencias EC Audio para completar la sincronización."
-            return
-        }
         isAccountBusy = true
         defer { isAccountBusy = false }
         do {
-            let exchangeBody = try JSONSerialization.data(withJSONObject: ["idToken": firebaseIDToken])
-            let session: CustomerSessionDTO = try await customerRequest(
-                "/api/customer/auth/firebase", method: "POST", body: exchangeBody, responseType: CustomerSessionDTO.self
-            )
-            customerToken = session.token
-            accountEmail = session.user.email.isEmpty ? email : session.user.email
+            customerToken = firebaseIDToken
+            if !refreshToken.isEmpty { customerRefreshToken = refreshToken }
+            if !uid.isEmpty { UserDefaults.standard.set(uid, forKey: firebaseUIDKey) }
+            accountEmail = email
             UserDefaults.standard.set(accountEmail, forKey: "ECAudioHubClient.accountEmail")
-            applySubscription(session.subscription)
-            accountMessage = "Sesión sincronizada con tu cuenta EC Audio."
+            let subscription = try await fetchCustomerSubscription()
+            applySubscription(subscription)
+            accountMessage = "Sesión Firebase sincronizada con la licencia compartida de EC Audio."
         } catch {
             accountMessage = error.localizedDescription
         }
@@ -539,16 +603,46 @@ final class ClientLibrary: ObservableObject {
 
     func activateTrial() async {
         guard !isAccountBusy else { return }
+        guard let uid = UserDefaults.standard.string(forKey: firebaseUIDKey), !uid.isEmpty else {
+            accountMessage = "Inicia sesión antes de activar la prueba gratuita."
+            return
+        }
         isAccountBusy = true
         defer { isAccountBusy = false }
         do {
-            let body = "{}".data(using: .utf8)
-            let result: CustomerActivationDTO = try await customerRequest(
-                "/api/customer/subscription/activate",
-                method: "POST", body: body, responseType: CustomerActivationDTO.self
-            )
-            applySubscription(result.subscription)
-            accountMessage = result.message
+            let documentName = "projects/\\(firebaseProjectID)/databases/(default)/documents/ecAudioSubscriptions/\\(uid)"
+            let bodyObject: [String: Any] = [
+                "writes": [[
+                    "update": [
+                        "name": documentName,
+                        "fields": [
+                            "uid": ["stringValue": uid],
+                            "email": ["stringValue": accountEmail],
+                            "status": ["stringValue": "active"],
+                            "plan": ["stringValue": "trial"],
+                            "trialUsed": ["booleanValue": true]
+                        ]
+                    ],
+                    "updateMask": ["fieldPaths": ["uid", "email", "status", "plan", "trialUsed"]],
+                    "updateTransforms": [[
+                        "fieldPath": "startedAt",
+                        "setToServerValue": "REQUEST_TIME"
+                    ]],
+                    "currentDocument": ["exists": false]
+                ]]
+            ]
+            let body = try JSONSerialization.data(withJSONObject: bodyObject)
+            let (data, status) = try await firestoreRequest("/documents:commit", method: "POST", body: body)
+            guard (200...299).contains(status) else {
+                let message = firestoreError(data, fallback: "No se pudo activar la prueba gratuita (HTTP \\(status)).")
+                if status == 409 || message.localizedCaseInsensitiveContains("already exists") {
+                    throw ClientAccountError.server("La prueba gratuita de esta cuenta ya fue utilizada.")
+                }
+                throw ClientAccountError.server(message)
+            }
+            let subscription = try await fetchCustomerSubscription()
+            applySubscription(subscription)
+            accountMessage = "Prueba gratuita activada durante 60 segundos. No se realizó ningún cobro."
         } catch {
             accountMessage = error.localizedDescription
         }
@@ -557,33 +651,33 @@ final class ClientLibrary: ObservableObject {
     func checkCustomerEntitlement() async {
         guard customerToken != nil else { return }
         do {
-            let result: CustomerSubscriptionEnvelope = try await customerRequest(
-                "/api/customer/subscription", responseType: CustomerSubscriptionEnvelope.self
-            )
-            applySubscription(result.subscription)
+            let subscription = try await fetchCustomerSubscription()
+            applySubscription(subscription)
         } catch {
             // Un fallo de red o servidor no demuestra que la licencia haya vencido.
-            accountMessage = "No se pudo verificar la licencia. Se conserva el estado actual hasta recibir confirmación del servidor."
+            accountMessage = "No se pudo verificar la licencia Firebase. Se conserva el estado actual: \\(error.localizedDescription)"
         }
     }
 
     private func applySubscription(_ subscription: CustomerSubscriptionDTO) {
         subscriptionActive = subscription.active
-        let expiry = subscription.remainingSeconds.map { " · \($0) s restantes" } ?? ""
+        let expiry = subscription.remainingSeconds.map { " · \\($0) s restantes" } ?? ""
         subscriptionStatus = subscription.active ? "Acceso activo" + expiry :
             (subscription.status == "expired" ? "Prueba vencida" : "Sin acceso activo")
         UserDefaults.standard.set(subscriptionStatus, forKey: "ECAudioHubClient.subscriptionStatus")
         if subscription.active {
             do { try restoreManagedPlugins() }
-            catch { accountMessage = "Acceso restaurado, pero algunos plugins requieren restauración manual: \(error.localizedDescription)" }
+            catch { accountMessage = "Acceso restaurado, pero algunos plugins requieren restauración manual: \\(error.localizedDescription)" }
         } else {
             do { try suspendManagedPlugins() }
-            catch { accountMessage = "La licencia venció, pero no se pudieron suspender todos los plugins: \(error.localizedDescription)" }
+            catch { accountMessage = "La licencia venció, pero no se pudieron suspender todos los plugins: \\(error.localizedDescription)" }
         }
     }
 
     func signOutCustomer() {
         customerToken = nil
+        customerRefreshToken = nil
+        UserDefaults.standard.removeObject(forKey: firebaseUIDKey)
         accountEmail = ""
         subscriptionActive = false
         subscriptionStatus = "Sesión cerrada"
