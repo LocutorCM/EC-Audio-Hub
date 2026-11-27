@@ -84,7 +84,7 @@ function adminOnly(req, res, next) {
   next();
 }
 function issueToken(user) {
-  return jwt.sign({ sub: user.id, role: user.role }, JWT_SECRET, { expiresIn: `${Math.min(90, Math.max(1, Number(process.env.TOKEN_DAYS || 30)))}d", issuer: 'ec-audio-cloud', audience: 'ec-audio-hub' });
+  return jwt.sign({ sub: user.id, role: user.role }, JWT_SECRET, { expiresIn: `${Math.min(90, Math.max(1, Number(process.env.TOKEN_DAYS || 30)) )}d`, issuer: 'ec-audio-cloud', audience: 'ec-audio-hub' });
 }
 const publicFields = `id,name,manufacturer,version,category,description,changelog,file_name AS fileName,
  content_type AS contentType,size_bytes AS sizeBytes,sha256,published,created_at AS createdAt,updated_at AS updatedAt`;
@@ -108,7 +108,7 @@ app.get('/api/admin/users', auth, adminOnly, (_req, res) => {
 app.post('/api/admin/users', auth, adminOnly, (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
   const password = String(req.body?.password || '');
-  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || password.length < 12) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 12) {
     return res.status(400).json({ error: 'Provide a valid email and a password of at least 12 characters.' });
   }
   if (db.prepare('SELECT id FROM users WHERE email=?').get(email)) return res.status(409).json({ error: 'That email already has an account.' });
