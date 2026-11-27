@@ -5,8 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 make g+
 COPY package*.json ./
 RUN npm install --omit=dev
 COPY src ./src
-COPY public ./public
-RUN mkdir -p /data/installers /data/tmp && chown -R node:node /data /app
+RUN mkdir -p /data/uploads /data/tmp && chown -R node:node /data /app
 ENV DATA_DIR=/data
 EXPOSE 8080
 VOLUME ["/data"]
