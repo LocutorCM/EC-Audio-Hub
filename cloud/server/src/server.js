@@ -153,6 +153,9 @@ function auth(req, res, next) {
    try {
      if (stripe && subscription.stripe_subscription_id) {
        await stripe.subscriptions.cancel(subscription.stripe_subscription_id);
+       const now = new Date().toISOString();
+       db.prepare("UPDATE customer_subscriptions SET status='canceled',expires_at=?,cancel_at_period_end=0,updated_at=? WHERE customer_id=?")
+         .run(now, now, req.params.customerId);
      } else {
        const now = new Date().toISOString();
        db.prepare("UPDATE customer_subscriptions SET status='canceled',expires_at=?,cancel_at_period_end=0,updated_at=? WHERE customer_id=?")
