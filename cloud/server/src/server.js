@@ -26,6 +26,7 @@ const MAX_UPLOAD = Math.max(1, Number(process.env.MAX_UPLOAD_GB || 2)) * 1024 * 
 if (!JWT_SECRET || JWT_SECRET.length < 40) throw new Error('JWT_SECRET must be set to at least 40 characters.');
 if (!ADMIN_EMAIL || ADMIN_PASSWORD.length < 14) throw new Error('Set ADMIN_EMAIL and an ADMIN_PASSWORD of at least 14 characters.');
 fs.mkdirSync(FILE_DIR, { recursive: true, mode: 0o750 });
+fs.mkdirSync(path.join(DATA_DIR, 'tmp'), { recursive: true, mode: 0o750 });
 
 const db = new Database(DB_FILE);
 db.pragma('journal_mode = WAL');
@@ -100,7 +101,29 @@ app.get('/api/catalog', auth, (_req, res) => {
   const plugins = db.prepare(`SELECT ${publicFields} FROM plugins WHERE published=1 ORDER BY category,name`).all();
   res.json({ plugins });
 });
-app.get('/api/admin/plugins', auth, adminOnly, (_req, res) => {
+app.get('/api/admin/users', auth, adminOnly, (_req, res) => {
+  const users = db.prepare("SELECT id,email,role,active,created_at AS createdAt FROM users ORDER BY created_at DESC").all();
+  res.json({ users });
+});
+app.post('/api/admin/users', auth, adminOnly, (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const password = String(req.body?.password || '');
+  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || password.length < 12) {
+    return res.status(400).json({ error: 'Provide a valid email and a password of at least 12 characters.' });
+  }
+  if (db.prepare('SELECT id FROM users WHERE email=?').get(email)) return res.status(409).json({ error: 'That email already has an account.' });
+  const id = crypto.randomUUID();
+  db.prepare('INSERT INTO users(id,email,password_hash,role,created_at) VALUES(?,?,?,?,?)')
+    .run(id, email, bcrypt.hashSync(password, 12), 'customer', new Date().toISOString());
+  res.status(201).json({ ok: true, user: { id, email, role: 'customer' } });
+});
+app.patch('/api/admin/users/:id', auth, adminOnly, (req, res) => {
+  const user = db.prepare('SELECT id,role FROM users WHERE id=?').get(req.params.id);
+  if (!user || user.role === 'admin') return res.status(404).json({ error: 'Customer not found.' });
+  db.prepare('UPDATE users SET active=? WHERE id=?').run(req.body?.active === false ? 0 : 1, user.id);
+  res.json({ ok: true });
+});
+\napp.get('/api/admin/plugins', auth, adminOnly, (_req, res) => {
   const plugins = db.prepare(`SELECT ${publicFields} FROM plugins ORDER BY updated_at DESC`).all();
   res.json({ plugins });
 });
@@ -126,7 +149,7 @@ function saveUpload(req, res, next) {
     next();
   });
 }
-app.post('/api/admin/plugins', auth, adminOnly, saveUpload, (req, res) => {
+app.post('/api/admin/plugins', auth, adminOnly, saveUpload, async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Select an installer file.' });
   const name = clean(req.body.name), manufacturer = clean(req.body.manufacturer), version = clean(req.body.version);
   if (!name || !manufacturer || !version) {
@@ -139,7 +162,7 @@ app.post('/api/admin/plugins', auth, adminOnly, saveUpload, (req, res) => {
   const destination = path.join(FILE_DIR, diskName);
   try {
     fs.renameSync(req.file.path, destination);
-    const hash = crypto.createHash('sha256').update(fs.readFileSync(destination)).digest('hex');
+    const hash = await new Promise((resolve, reject) => {\n      const digest = crypto.createHash('sha256');\n      const stream = fs.createReadStream(destination);\n      stream.on('data', chunk => digest.update(chunk));\n      stream.on('error', reject);\n      stream.on('end', () => resolve(digest.digest('hex')));\n    });
     const now = new Date().toISOString();
     db.prepare(`INSERT INTO plugins(id,name,manufacturer,version,category,description,changelog,file_name,disk_name,content_type,size_bytes,sha256,published,created_at,updated_at)
       VALUES(@id,@name,@manufacturer,@version,@category,@description,@changelog,@fileName,@diskName,@contentType,@sizeBytes,@sha256,@published,@now,@now)`)
