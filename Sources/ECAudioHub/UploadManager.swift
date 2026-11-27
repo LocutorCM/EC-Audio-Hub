@@ -85,6 +85,9 @@ final class UploadManager: ObservableObject {
         do {
             let pluginTitle = (release.name ?? release.tagName).components(separatedBy: " · v").first ?? release.tagName
             let targets = releases.filter { (($0.name ?? $0.tagName).components(separatedBy: " · v").first ?? $0.tagName) == pluginTitle }
+            // Retirar la familia de versiones de la interfaz inmediatamente.
+            let targetIDs = Set(targets.map(\.id))
+            releases.removeAll { targetIDs.contains($0.id) }
             for target in targets {
                 let releaseURL = URL(string: api + "/repos/" + repositoryOwner + "/" + repositoryName + "/releases/" + String(target.id))!
                 var request = URLRequest(url: releaseURL)
@@ -107,7 +110,10 @@ final class UploadManager: ObservableObject {
             }
             status = pluginTitle + " y todas sus versiones fueron eliminadas."
             await refreshReleases()
-        } catch { errorMessage = error.localizedDescription }
+        } catch {
+            errorMessage = error.localizedDescription
+            await refreshReleases()
+        }
     }
 
     func connectGitHub() async {
