@@ -424,7 +424,7 @@ onAuthStateChanged(auth, async (user) => {
       return;
     }
     showUser(user);
-    if (returnToNativeClient(user)) return;
+    if (new URLSearchParams(window.location.search).get("billing") !== "1" && returnToNativeClient(user)) return;
     await syncCustomerSession(user);
   } else showSignedOut();
 });
