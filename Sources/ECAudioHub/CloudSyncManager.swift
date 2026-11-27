@@ -113,7 +113,7 @@ final class CloudSyncManager: ObservableObject {
             throw CloudError.message("Usa la dirección HTTPS de tu servidor EC Audio Cloud.")
         }
         serverURL = normalized
-        var request = URLRequest(url: base.appendingPathComponent("api/auth/login"))
+        guard let loginURL = endpoint("api/auth/login") else { throw CloudError.message("Dirección del servidor inválida.") }\n        var request = URLRequest(url: loginURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: ["email": email, "password": password])
