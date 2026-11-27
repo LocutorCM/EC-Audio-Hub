@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 struct HubView: View {
     @State private var releaseToDelete: AdminRelease?
