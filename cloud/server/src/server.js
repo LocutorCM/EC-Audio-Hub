@@ -11,7 +11,6 @@ const rateLimit = require('express-rate-limit');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const Stripe = require('stripe');
 const Database = require('better-sqlite3');
 const { installCustomerAccountApi } = require('./customer-accounts');
 
