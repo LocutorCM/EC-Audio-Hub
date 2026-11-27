@@ -2,17 +2,25 @@ import SwiftUI
 
 private struct PluginArtworkView: View {
     let url: URL?
-    @State private var artwork: NSImage?
-    @State private var failed = false
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 12)
                 .fill(LinearGradient(colors: [Color(hex: 0x285E9C), Color(hex: 0x193453)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            if let artwork {
-                Image(nsImage: artwork)
-                    .resizable()
-                    .scaledToFill()
+            if let url {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    case .empty, .failure:
+                        Image(systemName: "waveform.path")
+                            .font(.system(size: 22, weight: .medium))
+                            .foregroundColor(Color(hex: 0xB7E5FF))
+                    @unknown default:
+                        Image(systemName: "waveform.path")
+                            .foregroundColor(Color(hex: 0xB7E5FF))
+                    }
+                }
             } else {
                 Image(systemName: "waveform.path")
                     .font(.system(size: 22, weight: .medium))
@@ -21,27 +29,6 @@ private struct PluginArtworkView: View {
         }
         .frame(width: 64, height: 64)
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .task(id: url) {
-            artwork = nil
-            failed = false
-            guard let url else { return }
-            do {
-                var request = URLRequest(url: url)
-                request.setValue("image/avif,image/webp,image/apng,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
-                request.setValue("EC-Audio-Hub-Client", forHTTPHeaderField: "User-Agent")
-                request.timeoutInterval = 30
-                let (data, response) = try await URLSession.shared.data(for: request)
-                guard let http = response as? HTTPURLResponse,
-                      (200...299).contains(http.statusCode),
-                      let decoded = NSImage(data: data) else {
-                    failed = true
-                    return
-                }
-                artwork = decoded
-            } catch {
-                failed = true
-            }
-        }
     }
 }
 
