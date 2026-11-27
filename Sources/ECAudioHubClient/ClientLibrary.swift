@@ -35,7 +35,7 @@ final class ClientLibrary: ObservableObject {
     }
 
     var updateCount: Int {
-        plugins.filter { installedVersions[$0.id] != nil && installedVersions[$0.id] != $0.version }.count
+        plugins.filter { (installedVersions[$0.id] ?? installedVersions[$0.name]) != nil && (installedVersions[$0.id] ?? installedVersions[$0.name]) != $0.version }.count
     }
 
     var installedCount: Int { installedVersions.count }
@@ -57,10 +57,27 @@ final class ClientLibrary: ObservableObject {
                 request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
                 request.setValue("EC-Audio-Hub-Client", forHTTPHeaderField: "User-Agent")
                 request.timeoutInterval = 30
-                let (data, response) = try await URLSession.shared.data(for: request)
-                guard let http = response as? HTTPURLResponse,
-                      (200...299).contains(http.statusCode) else {
-                    throw URLError(.badServerResponse)
+                let pageCacheKey = "\(catalogETagKey).page.\(page)"
+                if let etag = UserDefaults.standard.string(forKey: pageCacheKey + ".etag") {
+                    request.setValue(etag, forHTTPHeaderField: "If-None-Match")
+                }
+                let (networkData, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+                let data: Data
+                if http.statusCode == 304 {
+                    guard let cached = UserDefaults.standard.data(forKey: pageCacheKey + ".data") else {
+                        throw URLError(.cannotParseResponse)
+                    }
+                    data = cached
+                } else {
+                    guard (200...299).contains(http.statusCode) else { throw URLError(.badServerResponse) }
+                    data = networkData
+                    UserDefaults.standard.set(data, forKey: pageCacheKey + ".data")
+                    if let etag = http.value(forHTTPHeaderField: "ETag") {
+                        UserDefaults.standard.set(etag, forKey: pageCacheKey + ".etag")
+                    } else {
+                        UserDefaults.standard.removeObject(forKey: pageCacheKey + ".etag")
+                    }
                 }
                 let batch = try JSONDecoder().decode([GitHubRelease].self, from: data)
                 releases.append(contentsOf: batch)
