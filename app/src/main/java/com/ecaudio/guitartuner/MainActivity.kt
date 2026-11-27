@@ -29,6 +29,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -140,10 +142,12 @@ private fun CameraApp() {
             if (cameraGranted) {
                 AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
                 if (grid) Grid(Modifier.fillMaxSize())
-                // Tap the preview to request autofocus and metering.
-                Box(Modifier.fillMaxSize().clickable {
-                    val point = previewView.meteringPointFactory.createPoint(previewView.width / 2f, previewView.height / 2f)
-                    camera?.cameraControl?.startFocusAndMetering(FocusMeteringAction.Builder(point).build())
+                // Tap the exact point in the preview to focus and meter.
+                Box(Modifier.fillMaxSize().pointerInput(camera) {
+                    detectTapGestures { tap ->
+                        val point = previewView.meteringPointFactory.createPoint(tap.x, tap.y)
+                        camera?.cameraControl?.startFocusAndMetering(FocusMeteringAction.Builder(point).build())
+                    }
                 })
                 Column(Modifier.fillMaxSize()) {
                     Column(Modifier.fillMaxWidth().background(Color(0xD9080A0D)).padding(14.dp)) {
