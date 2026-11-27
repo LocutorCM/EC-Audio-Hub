@@ -35,13 +35,13 @@ final class ClientLibrary: ObservableObject {
     }
 
     var updateCount: Int {
-        plugins.filter { installedVersions[$0.name] != nil && installedVersions[$0.name] != $0.version }.count
+        plugins.filter { installedVersions[$0.id] != nil && installedVersions[$0.id] != $0.version }.count
     }
 
     var installedCount: Int { installedVersions.count }
 
     func installedVersion(for plugin: HubPlugin) -> String? {
-        installedVersions[plugin.name]
+        installedVersions[plugin.id]
     }
 
     func refresh() async {
@@ -108,7 +108,7 @@ final class ClientLibrary: ObservableObject {
                 let artworkURL = imageAsset?.browserDownloadURL ?? metadataImageURL
 
                 found.append(HubPlugin(
-                    id: release.tagName + ":" + asset.name,
+                    id: String(release.id) + ":" + asset.name,
                     name: pluginName,
                     version: version,
                     fileName: asset.name,
@@ -120,18 +120,12 @@ final class ClientLibrary: ObservableObject {
                 ))
             }
 
-            // Keep the newest release for each plugin name.
-            var newest: [String: HubPlugin] = [:]
-            for plugin in found {
-                if let current = newest[plugin.name] {
-                    if compareVersions(plugin.version, current.version) == .orderedDescending {
-                        newest[plugin.name] = plugin
-                    }
-                } else {
-                    newest[plugin.name] = plugin
-                }
+            // Cada release es una publicación independiente. No agrupar por nombre:
+            // se permiten nombres y versiones repetidos.
+            plugins = found.sorted {
+                let order = $0.name.localizedCaseInsensitiveCompare($1.name)
+                return order == .orderedSame ? $0.id < $1.id : order == .orderedAscending
             }
-            plugins = newest.values.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
             status = plugins.isEmpty
                 ? "No hay plugins publicados todavía. Publica uno desde EC Audio Hub Admin."
                 : "\(plugins.count) plugin(s) disponibles · Catálogo actualizado."
@@ -165,8 +159,8 @@ final class ClientLibrary: ObservableObject {
 
             let installed = try installPluginFile(temporaryURL, plugin: plugin)
             if let installed, !installed.isEmpty {
-                installedVersions[plugin.name] = plugin.version
-                installedPaths[plugin.name] = installed.map(\.path)
+                installedVersions[plugin.id] = plugin.version
+                installedPaths[plugin.id] = installed.map(\.path)
                 UserDefaults.standard.set(installedVersions, forKey: installedKey)
                 UserDefaults.standard.set(installedPaths, forKey: installedPathsKey)
                 status = "\(plugin.name) \(plugin.version) se instaló correctamente."
