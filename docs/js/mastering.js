@@ -5,17 +5,17 @@ import { analyzeAndRecommend } from "./mix-doctor.js";
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const $ = (id) => document.getElementById(id);
-let selectedFile = null, originalURL = null, masteredURL = null, busy = false, signedInUser = null;
+let selectedFile = null, originalURL = null, masteredURL = null, busy = false, signedInUser = null, autoMasterBuffer = null;
 const profiles = {
-  auto: {name:"Adaptativo EC", target:-14, hp:28, low:0, body:0, presence:0.5, air:0.5, threshold:-20, ratio:2.3},
-  urban:{name:"Urbano / Reggaetón",target:-10.5,hp:30,low:0.8,body:0.2,presence:0.4,air:0.8,threshold:-19,ratio:2.8},
-  rap:{name:"Rap / Hip-hop",target:-11,hp:28,low:0.5,body:0.4,presence:0.8,air:0.4,threshold:-20,ratio:2.6},
-  pop:{name:"Pop",target:-12,hp:30,low:0.2,body:0.2,presence:0.7,air:0.8,threshold:-21,ratio:2.4},
-  rock:{name:"Rock",target:-11.5,hp:35,low:0.2,body:0.4,presence:0.5,air:0.2,threshold:-22,ratio:3},
-  worship:{name:"Adoración",target:-14,hp:28,low:0.1,body:0.3,presence:0.4,air:0.5,threshold:-21,ratio:2.1},
-  ballad:{name:"Balada",target:-14,hp:25,low:0,body:0.4,presence:0.3,air:0.6,threshold:-23,ratio:2},
-  electronic:{name:"Electrónica",target:-9.5,hp:30,low:0.5,body:0.1,presence:0.4,air:0.5,threshold:-18,ratio:3},
-  acoustic:{name:"Acústica",target:-15,hp:35,low:0,body:0.2,presence:0.5,air:0.5,threshold:-23,ratio:1.9}
+  auto: {name:"Adaptativo EC", target:-14, hp:28, low:0, body:0, presence:0.5, air:0.5, threshold:-16, ratio:1.8},
+  urban:{name:"Urbano / Reggaetón",target:-10.5,hp:30,low:0.8,body:0.2,presence:0.4,air:0.8,threshold:-15,ratio:2.1},
+  rap:{name:"Rap / Hip-hop",target:-11,hp:28,low:0.5,body:0.4,presence:0.8,air:0.4,threshold:-16,ratio:2},
+  pop:{name:"Pop",target:-12,hp:30,low:0.2,body:0.2,presence:0.7,air:0.8,threshold:-16,ratio:1.9},
+  rock:{name:"Rock",target:-11.5,hp:35,low:0.2,body:0.4,presence:0.5,air:0.2,threshold:-17,ratio:2.2},
+  worship:{name:"Adoración",target:-14,hp:28,low:0.1,body:0.3,presence:0.4,air:0.5,threshold:-16,ratio:1.8},
+  ballad:{name:"Balada",target:-14,hp:25,low:0,body:0.4,presence:0.3,air:0.6,threshold:-17,ratio:1.7},
+  electronic:{name:"Electrónica",target:-9.5,hp:30,low:0.5,body:0.1,presence:0.4,air:0.5,threshold:-14,ratio:2.2},
+  acoustic:{name:"Acústica",target:-15,hp:35,low:0,body:0.2,presence:0.5,air:0.5,threshold:-17,ratio:1.6}
 };
 function formatBytes(n){return n<1048576?(n/1024).toFixed(0)+" KB":(n/1048576).toFixed(1)+" MB";}
 function showError(message){$("errorBox").textContent=message;$("errorBox").classList.add("show");}
@@ -79,7 +79,7 @@ async function renderMaster(input,profile,onProgress){
   if(profile.presence)connectFilter("peaking",3200,profile.presence,0.9);
   if(profile.air)connectFilter("highshelf",10500,profile.air,0.7);
   const compressor=offline.createDynamicsCompressor();compressor.threshold.value=profile.threshold;compressor.knee.value=12;compressor.ratio.value=profile.ratio;compressor.attack.value=0.012;compressor.release.value=0.18;node.connect(compressor);node=compressor;
-  const limiter=offline.createDynamicsCompressor();limiter.threshold.value=-3;limiter.knee.value=0;limiter.ratio.value=16;limiter.attack.value=0.002;limiter.release.value=0.08;node.connect(limiter);node=limiter;
+  const limiter=offline.createDynamicsCompressor();limiter.threshold.value=-1.2;limiter.knee.value=3;limiter.ratio.value=5;limiter.attack.value=0.004;limiter.release.value=0.14;node.connect(limiter);node=limiter;
   const gain=offline.createGain();gain.gain.value=1;node.connect(gain);gain.connect(offline.destination);source.start(0);
   onProgress(32,"Aplicando ecualización y control dinámico…");
   const rendered=await offline.startRendering();onProgress(76,"Midiendo nivel y preparando limitación final…");
@@ -92,8 +92,52 @@ async function renderMaster(input,profile,onProgress){
   onProgress(88,"Verificando pico de salida…");
   onProgress(94,"Preparando WAV de 24 bits…");
   const finalStats=stats(normalizedBuffer);
-  return {blob:encodeWav24(normalizedBuffer),inputPeak:db(stats(input).peak),outputPeak:db(finalStats.peak),profile:profile.name,target:profile.target,analysis:profile.analysis};
+  return {blob:encodeWav24(normalizedBuffer),buffer:normalizedBuffer,inputPeak:db(stats(input).peak),outputPeak:db(finalStats.peak),profile:profile.name,target:profile.target,analysis:profile.analysis};
 }
+function updateFinishLabels(){
+  $("widthValue").textContent=$("widthControl").value+"%";
+  $("bassValue").textContent=Number($("bassControl").value).toFixed(1)+" dB";
+  $("midValue").textContent=Number($("midControl").value).toFixed(1)+" dB";
+  $("highValue").textContent=Number($("highControl").value).toFixed(1)+" dB";
+}
+async function renderFinishing(input,bass,mid,high,width){
+  const rate=input.sampleRate,channels=input.numberOfChannels;
+  const ctx=new OfflineAudioContext(channels,input.length,rate),src=ctx.createBufferSource();src.buffer=input;
+  let node=src;
+  const addFilter=(type,freq,gain,q=.8)=>{const f=ctx.createBiquadFilter();f.type=type;f.frequency.value=freq;f.Q.value=q;f.gain.value=gain;node.connect(f);node=f;};
+  if(bass)addFilter("lowshelf",110,bass);
+  if(mid)addFilter("peaking",1100,mid,.75);
+  if(high)addFilter("highshelf",9000,high);
+  if(channels>1&&width!==100){
+    const split=ctx.createChannelSplitter(2),merge=ctx.createChannelMerger(2);
+    const l=ctx.createGain(),r=ctx.createGain();node.connect(split);split.connect(l,0);split.connect(r,1);
+    const w=Math.max(0,Math.min(1.5,width/100));
+    const ll=ctx.createGain(),lr=ctx.createGain(),rl=ctx.createGain(),rr=ctx.createGain();
+    ll.gain.value=.5+.5*w;lr.gain.value=.5-.5*w;rl.gain.value=.5-.5*w;rr.gain.value=.5+.5*w;
+    l.connect(ll);r.connect(lr);l.connect(rl);r.connect(rr);
+    ll.connect(merge,0,0);lr.connect(merge,0,0);rl.connect(merge,0,1);rr.connect(merge,0,1);node=merge;
+  }
+  const out=ctx.createGain();node.connect(out);out.connect(ctx.destination);src.start(0);
+  const rendered=await ctx.startRendering(),s=stats(rendered),ceiling=Math.pow(10,-1/20);
+  const gain=s.peak>ceiling?ceiling/s.peak:1;
+  if(gain<.999){const safe=new OfflineAudioContext(channels,rendered.length,rate),ss=safe.createBufferSource(),gg=safe.createGain();ss.buffer=rendered;gg.gain.value=gain;ss.connect(gg);gg.connect(safe.destination);ss.start(0);return encodeWav24(await safe.startRendering());}
+  return encodeWav24(rendered);
+}
+["widthControl","bassControl","midControl","highControl"].forEach(id=>$(id).addEventListener("input",updateFinishLabels));
+$("applyFinish").addEventListener("click",async()=>{
+  if(!autoMasterBuffer)return;
+  const button=$("applyFinish");button.disabled=true;button.textContent="APLICANDO…";
+  try{
+    const blob=await renderFinishing(autoMasterBuffer,Number($("bassControl").value),Number($("midControl").value),Number($("highControl").value),Number($("widthControl").value));
+    if(masteredURL)URL.revokeObjectURL(masteredURL);masteredURL=URL.createObjectURL(blob);
+    $("masteredPlayer").src=masteredURL;$("downloadLink").href=masteredURL;$("resultState").textContent="AJUSTES APLICADOS";
+  }catch(e){showError("No se pudieron aplicar los ajustes: "+(e.message||"error de procesamiento"));}
+  finally{button.disabled=false;button.textContent="APLICAR AJUSTES";}
+});
+$("resetFinish").addEventListener("click",()=>{
+  if(!autoMasterBuffer)return;
+  $("widthControl").value=100;$("bassControl").value=0;$("midControl").value=0;$("highControl").value=0;updateFinishLabels();$("applyFinish").click();
+});
 $("masterButton").addEventListener("click",async()=>{
   if(!selectedFile||busy)return;clearError();if(!signedInUser){window.location.href="./account.html?return=mastering";return;}busy=true;$("masterButton").disabled=true;$("resultState").textContent="PROCESANDO";
   let context;
@@ -113,17 +157,21 @@ $("masterButton").addEventListener("click",async()=>{
     // The analysis drives the mastering decisions; genre is only a gentle tonal starting point.
     profile.low=Math.max(-2.5,Math.min(2.5,base.low+analysis.lowDb));
     profile.air=Math.max(-2.5,Math.min(2.5,base.air+analysis.highDb));
-    profile.ratio=Math.max(1.5,Math.min(4,analysis.ratio));
-    profile.threshold=Math.max(-28,Math.min(-16,base.threshold+(analysis.crestDb>12?-2:analysis.crestDb<7?2:0)));
+    profile.ratio=Math.max(1.5,Math.min(2.2,analysis.crestDb>12?2.1:analysis.crestDb>8?1.9:1.6));
+    profile.threshold=Math.max(-19,Math.min(-13,base.threshold+(analysis.crestDb>12?1:analysis.crestDb<7?-1:0)));
     profile.width=Math.max(.75,Math.min(1.12,analysis.width/100));
-    if($("genre").value==="auto")profile.target=analysis.crestDb>12?-14.5:-13.5;
+    if($("genre").value==="auto")profile.target=analysis.crestDb>12?-13:-12.5;
     profile.analysis=analysis;
     const result=await renderMaster(decoded,profile,setProgress);
-    if(masteredURL)URL.revokeObjectURL(masteredURL);masteredURL=URL.createObjectURL(result.blob);
+    autoMasterBuffer=result.buffer;
+    ["widthControl","bassControl","midControl","highControl"].forEach(id=>$(id).value=id==="widthControl"?100:0);
+    updateFinishLabels();
+    const finalBlob=await renderFinishing(autoMasterBuffer,0,0,0,100);
+    masteredURL=URL.createObjectURL(finalBlob);
     $("masteredPlayer").src=masteredURL;$("downloadLink").href=masteredURL;
     $("downloadLink").download=(selectedFile.name.replace(/\.[^.]+$/,"")||"EC-Audio")+"-EC-AI-Mastered-24bit.wav";
     $("profileValue").textContent=result.profile;$("lufsValue").textContent=result.target+" dBFS RMS aprox.";$("peakValue").textContent=result.inputPeak+" dBFS";$("outputPeakValue").textContent=result.outputPeak+" dBFS";
-    $("result").classList.add("show");$("emptyResult").hidden=true;$("resultState").textContent="MASTER COMPLETADA";$("resultState").style.color="var(--lime)";setProgress(100,"Master terminada");
+    $("result").classList.add("show");$("emptyResult").hidden=true;$("resultState").textContent="MASTER COMPLETADA";$("resultState").style.color="var(--lime)";setProgress(100,"Master automática terminada · ajustes finales disponibles");
   }catch(error){showError(error.message||"No se pudo masterizar esta canción.");$("resultState").textContent="ERROR";$("resultState").style.color="#ffabb7";}
   finally{if(context)try{await context.close();}catch{}busy=false;$("masterButton").disabled=!selectedFile;$("status").classList.remove("show");}
 });
