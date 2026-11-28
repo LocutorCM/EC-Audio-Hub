@@ -9,7 +9,7 @@ let package = Package(
         .executable(name: "EC-Audio-Hub-Client", targets: ["ECAudioHubClient"])
     ],
     targets: [
-        .executableTarget(name: "ECAudioHub", path: "Sources/ECAudioHub"),
-        .executableTarget(name: "ECAudioHubClient", path: "Sources/ECAudioHubClient")
+        .executableTarget(name: "ECAudioHub", path: "Sources/ECAudioHub", resources: [.process("Resources")]),
+        .executableTarget(name: "ECAudioHubClient", path: "Sources/ECAudioHubClient", resources: [.process("Resources")])
     ]
 )
