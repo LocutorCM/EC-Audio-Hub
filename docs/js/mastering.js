@@ -38,6 +38,16 @@ function runBiquad(data,coeffs){
   for(let i=0;i<data.length;i++){const x=data[i],y=b0*x+b1*x1+b2*x2-a1*y1-a2*y2;out[i]=y;x2=x1;x1=x;y2=y1;y1=y;}
   return out;
 }
+function createSafeOfflineContext(channels,frames,sampleRate){
+  const channelCount=Math.max(1,Math.min(2,Math.trunc(Number(channels))||1));
+  let rate=Number(sampleRate);
+  if(!Number.isFinite(rate)||rate<8000||rate>192000)rate=48000;
+  const length=Number(frames);
+  if(!Number.isFinite(length)||length<1)throw new Error("No se pudo determinar la duración del audio. Vuelve a cargar el archivo.");
+  const frameCount=Math.trunc(length);
+  if(!Number.isSafeInteger(frameCount)||frameCount<1||frameCount>rate*600)throw new Error("La duración del audio no es válida o supera el límite de 10 minutos.");
+  return new OfflineAudioContext(channelCount,frameCount,rate);
+}
 function measureIntegratedLUFS(buffer){
   const rate=buffer.sampleRate,n=buffer.length,channels=buffer.numberOfChannels;
   if(!n)return -120;
@@ -70,11 +80,13 @@ function measureTruePeak(buffer){
   return db(peak);
 }
 async function applyGain(buffer,gainDb){
-  const ctx=new OfflineAudioContext(buffer.numberOfChannels,buffer.length,buffer.sampleRate),src=ctx.createBufferSource(),g=ctx.createGain();
+  if(!Number.isFinite(gainDb))throw new Error("El nivel de ganancia calculado no es válido.");
+  const ctx=createSafeOfflineContext(buffer.numberOfChannels,buffer.length,buffer.sampleRate),src=ctx.createBufferSource(),g=ctx.createGain();
   src.buffer=buffer;g.gain.value=Math.pow(10,gainDb/20);src.connect(g);g.connect(ctx.destination);src.start(0);return ctx.startRendering();
 }
 async function loudnessFinish(buffer){
-  const target=Number($("targetLufs").value),ceiling=Number($("truePeakTarget").value);
+  const targetValue=Number($("targetLufs").value),ceilingValue=Number($("truePeakTarget").value);
+  const target=Number.isFinite(targetValue)?targetValue:-14,ceiling=Number.isFinite(ceilingValue)?ceilingValue:-1;
   const current=measureIntegratedLUFS(buffer);
   let gainDb=Math.max(-18,Math.min(18,target-current));
   const tp=measureTruePeak(buffer)+gainDb;
@@ -127,7 +139,7 @@ function applyStereoWidth(buffer,width){
 async function renderMaster(input,profile,onProgress){
   const rate=48000,channels=Math.min(2,input.numberOfChannels),frames=Math.ceil(input.duration*rate);
   if(!Number.isFinite(frames)||frames<1||frames>rate*600)throw new Error("La canción supera el límite de 10 minutos para el procesamiento local.");
-  const offline=new OfflineAudioContext(channels,frames,rate);
+  const offline=createSafeOfflineContext(channels,frames,rate);
   const source=offline.createBufferSource();source.buffer=input;
   let node=source;
   const connectFilter=(type,freq,gain,q=0.707)=>{
@@ -164,7 +176,7 @@ function updateFinishLabels(){
 }
 async function renderFinishing(input,bass,mid,high,width){
   const rate=input.sampleRate,channels=input.numberOfChannels;
-  const ctx=new OfflineAudioContext(channels,input.length,rate),src=ctx.createBufferSource();src.buffer=input;
+  const ctx=createSafeOfflineContext(channels,input.length,rate),src=ctx.createBufferSource();src.buffer=input;
   let node=src;
   const addFilter=(type,freq,gain,q=.8)=>{const f=ctx.createBiquadFilter();f.type=type;f.frequency.value=freq;f.Q.value=q;f.gain.value=gain;node.connect(f);node=f;};
   if(bass)addFilter("lowshelf",110,bass);
@@ -182,7 +194,7 @@ async function renderFinishing(input,bass,mid,high,width){
   const out=ctx.createGain();node.connect(out);out.connect(ctx.destination);src.start(0);
   const rendered=await ctx.startRendering(),s=stats(rendered),ceiling=Math.pow(10,-1/20);
   const gain=s.peak>ceiling?ceiling/s.peak:1;
-  if(gain<.999){const safe=new OfflineAudioContext(channels,rendered.length,rate),ss=safe.createBufferSource(),gg=safe.createGain();ss.buffer=rendered;gg.gain.value=gain;ss.connect(gg);gg.connect(safe.destination);ss.start(0);return encodeWav24(await safe.startRendering());}
+  if(gain<.999){const safe=createSafeOfflineContext(channels,rendered.length,rate),ss=safe.createBufferSource(),gg=safe.createGain();ss.buffer=rendered;gg.gain.value=gain;ss.connect(gg);gg.connect(safe.destination);ss.start(0);return encodeWav24(await safe.startRendering());}
   return encodeWav24(rendered);
 }
 ["widthControl","bassControl","midControl","highControl"].forEach(id=>$(id).addEventListener("input",updateFinishLabels));
