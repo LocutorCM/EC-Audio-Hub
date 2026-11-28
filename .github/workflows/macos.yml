@@ -26,7 +26,7 @@ jobs:
       - name: Create EC Audio app icon
         run: |
           mkdir -p dist/ECAppIcon.iconset
-          base64 --decode Assets/ec-audio-logo.jpg.b64 > dist/ec-audio-logo.jpg
+          base64 -D -i Assets/ec-audio-logo.jpg.b64 -o dist/ec-audio-logo.jpg
           for size in 16 32 128 256 512; do
             sips -s format png -z $size $size dist/ec-audio-logo.jpg --out dist/ECAppIcon.iconset/icon_${size}x${size}.png >/dev/null
             if [ "$size" != "512" ]; then
