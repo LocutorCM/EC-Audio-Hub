@@ -46,7 +46,7 @@ async function probe(file) {
 }
 async function measure(file) {
   try {
-    const { stderr } = await run('ffmpeg', ['-hide_banner','-i',file,'-af','volumedetect','-f','null','-'], { timeout:120000, maxBuffer:4*1024*1024 });
+    const { stderr } = await run('ffmpeg', ['-hide_banner','-i',file,'-map','0:a:0','-vn','-af','volumedetect','-f','null','-'], { timeout:120000, maxBuffer:4*1024*1024 });
     const mean = stderr.match(/mean_volume:\s*(-?[\d.]+)\s*dB/i);
     const peak = stderr.match(/max_volume:\s*(-?[\d.]+)\s*dB/i);
     return { meanDb:mean?Number(mean[1]):null, peakDb:peak?Number(peak[1]):null, clippingRisk:peak?Number(peak[1])>=-0.1:false };
@@ -80,7 +80,7 @@ function installMasteringApi(app, { customerAuth }) {
       let loudnorm=loudnormBase+':linear=true:print_format=summary';
       // Pass 1 measures integrated loudness and true peak after tone/dynamics processing.
       try {
-        const analysis=await run('ffmpeg',['-hide_banner','-i',inputPath,'-af',preFilters+','+loudnormBase+':print_format=json','-f','null','-'],{timeout:Math.max(180000,Math.ceil(info.duration*12000)),maxBuffer:8*1024*1024});
+        const analysis=await run('ffmpeg',['-hide_banner','-i',inputPath,'-map','0:a:0','-vn','-af',preFilters+','+loudnormBase+':print_format=json','-f','null','-'],{timeout:Math.max(180000,Math.ceil(info.duration*12000)),maxBuffer:8*1024*1024});
         const match=analysis.stderr.match(/\{[\s\S]*?"input_i"[\s\S]*?\}/);
         if(match) {
           const measured=JSON.parse(match[0]);
