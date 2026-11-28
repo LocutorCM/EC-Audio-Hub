@@ -50,19 +50,25 @@ function estimateKey(buffer){
 const scales={major:[0,2,4,5,7,9,11],minor:[0,2,3,5,7,8,10]};
 function chordProgression(style){return ["rap","urban","trap","rnb"].includes(style)?[0,5,3,4]:style==="rock"?[0,3,5,0]:[0,4,5,3];}
 function midiHz(n){return 440*Math.pow(2,(n-69)/12);}
+function finiteNumber(value,fallback=0){return Number.isFinite(value)?value:fallback;}
+function safeTime(ctx,value){const end=Number.isFinite(ctx.length)&&Number.isFinite(ctx.sampleRate)?ctx.length/ctx.sampleRate:Infinity;return Math.max(0,Math.min(finiteNumber(value,0),end));}
 function addTone(ctx,when,duration,freq,type,gain,pan=0,detune=0){
- const osc=ctx.createOscillator(),amp=ctx.createGain(),p=ctx.createStereoPanner();
- osc.type=type;osc.frequency.setValueAtTime(freq,when);osc.detune.value=detune;
- amp.gain.setValueAtTime(.0001,when);amp.gain.exponentialRampToValueAtTime(Math.max(.0002,gain),when+.018);
- amp.gain.setTargetAtTime(.0001,when+Math.max(.04,duration*.68),Math.max(.025,duration*.12));
- p.pan.value=pan;osc.connect(amp);amp.connect(p);p.connect(ctx.destination);osc.start(when);osc.stop(when+duration+.15);
+ when=safeTime(ctx,when);duration=finiteNumber(duration,0);freq=finiteNumber(freq,0);gain=finiteNumber(gain,0);pan=finiteNumber(pan,0);detune=finiteNumber(detune,0);
+ if(duration<=0||freq<=0||gain<=0||when>=ctx.length/ctx.sampleRate)return;
+ const end=Math.min(ctx.length/ctx.sampleRate,when+duration),osc=ctx.createOscillator(),amp=ctx.createGain(),p=ctx.createStereoPanner();
+ osc.type=type;osc.frequency.setValueAtTime(freq,when);osc.detune.setValueAtTime(detune,when);
+ amp.gain.setValueAtTime(.0001,when);amp.gain.exponentialRampToValueAtTime(Math.max(.0002,gain),Math.min(end,when+.018));
+ amp.gain.setTargetAtTime(.0001,Math.min(end,when+Math.max(.04,duration*.68)),Math.max(.025,duration*.12));
+ p.pan.setValueAtTime(Math.max(-1,Math.min(1,pan)),when);osc.connect(amp);amp.connect(p);p.connect(ctx.destination);osc.start(when);osc.stop(Math.min(ctx.length/ctx.sampleRate,end+.15));
 }
 function addKick(ctx,t,level=.7){
- const o=ctx.createOscillator(),g=ctx.createGain();o.type="sine";o.frequency.setValueAtTime(115,t);o.frequency.exponentialRampToValueAtTime(42,t+.16);g.gain.setValueAtTime(level,t);g.gain.exponentialRampToValueAtTime(.0001,t+.22);o.connect(g);g.connect(ctx.destination);o.start(t);o.stop(t+.23);
+ t=safeTime(ctx,t);level=finiteNumber(level,0);if(level<=0||t>=ctx.length/ctx.sampleRate)return;
+ const end=ctx.length/ctx.sampleRate,o=ctx.createOscillator(),g=ctx.createGain();o.type="sine";o.frequency.setValueAtTime(115,t);o.frequency.exponentialRampToValueAtTime(42,Math.min(end,t+.16));g.gain.setValueAtTime(level,t);g.gain.exponentialRampToValueAtTime(.0001,Math.min(end,t+.22));o.connect(g);g.connect(ctx.destination);o.start(t);o.stop(Math.min(end,t+.23));
 }
 function addNoise(ctx,t,duration,level,highpass=5000){
- const size=Math.ceil(ctx.sampleRate*duration),b=ctx.createBuffer(1,size,ctx.sampleRate),d=b.getChannelData(0);for(let i=0;i<size;i++)d[i]=Math.random()*2-1;
- const src=ctx.createBufferSource(),f=ctx.createBiquadFilter(),g=ctx.createGain();src.buffer=b;f.type="highpass";f.frequency.value=highpass;g.gain.setValueAtTime(level,t);g.gain.exponentialRampToValueAtTime(.0001,t+duration);src.connect(f);f.connect(g);g.connect(ctx.destination);src.start(t);src.stop(t+duration);
+ t=safeTime(ctx,t);duration=finiteNumber(duration,0);level=finiteNumber(level,0);highpass=finiteNumber(highpass,5000);if(duration<=0||level<=0||t>=ctx.length/ctx.sampleRate)return;
+ duration=Math.min(duration,ctx.length/ctx.sampleRate-t);const size=Math.max(1,Math.ceil(ctx.sampleRate*duration)),b=ctx.createBuffer(1,size,ctx.sampleRate),d=b.getChannelData(0);for(let i=0;i<size;i++)d[i]=Math.random()*2-1;
+ const src=ctx.createBufferSource(),f=ctx.createBiquadFilter(),g=ctx.createGain();src.buffer=b;f.type="highpass";f.frequency.setValueAtTime(Math.max(10,Math.min(highpass,ctx.sampleRate/2)),t);g.gain.setValueAtTime(level,t);g.gain.exponentialRampToValueAtTime(.0001,t+duration);src.connect(f);f.connect(g);g.connect(ctx.destination);src.start(t);src.stop(t+duration);
 }
 function addChord(ctx,t,dur,root,quality,style,pianoLike=false){
  const intervals=quality==="minor"?[0,3,7]:[0,4,7];
