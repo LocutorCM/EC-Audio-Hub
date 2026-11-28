@@ -70,11 +70,24 @@ function addNoise(ctx,t,duration,level,highpass=5000){
  duration=Math.min(duration,ctx.length/ctx.sampleRate-t);const size=Math.max(1,Math.ceil(ctx.sampleRate*duration)),b=ctx.createBuffer(1,size,ctx.sampleRate),d=b.getChannelData(0);for(let i=0;i<size;i++)d[i]=Math.random()*2-1;
  const src=ctx.createBufferSource(),f=ctx.createBiquadFilter(),g=ctx.createGain();src.buffer=b;f.type="highpass";f.frequency.setValueAtTime(Math.max(10,Math.min(highpass,ctx.sampleRate/2)),t);g.gain.setValueAtTime(level,t);g.gain.exponentialRampToValueAtTime(.0001,t+duration);src.connect(f);f.connect(g);g.connect(ctx.__mixBus||ctx.destination);src.start(t);src.stop(t+duration);
 }
+function addSnare(ctx,t,level=.22){
+ t=safeTime(ctx,t);if(level<=0||t>=ctx.length/ctx.sampleRate)return;
+ addNoise(ctx,t,.19,level,1200);
+ addTone(ctx,t,.11,midiHz(48),"triangle",level*.22,0);
+}
+function addHat(ctx,t,level=.075,open=false){
+ addNoise(ctx,t,open?.16:.045,level,8500);
+}
+function addPluck(ctx,t,dur,note,level=.045,pan=0){
+ addTone(ctx,t,dur,midiHz(note),"triangle",level,pan);
+ addTone(ctx,t,dur*.55,midiHz(note+12),"sine",level*.22,-pan);
+}
 function addChord(ctx,t,dur,root,quality,style,pianoLike=false){
  const intervals=quality==="minor"?[0,3,7]:[0,4,7];
  const pad=["worship","ballad","cinematic","acoustic"].includes(style);
- intervals.forEach((iv,i)=>{const note=root+iv+ (pad?0:12);addTone(ctx,t,dur,midiHz(note),pianoLike?"triangle":(pad?"sawtooth":"triangle"),pad?.035:.022,i===0?-.22:.22,i===1?4:0);});
- if(pad)addTone(ctx,t,dur,midiHz(root+12),"triangle",.018,0,-5);
+ intervals.forEach((iv,i)=>{const note=root+iv+(pad?0:12);addTone(ctx,t,dur,midiHz(note),pianoLike?"triangle":(pad?"sawtooth":"triangle"),pad?.075:.052,i===0?-.28:.28,i===1?4:0);});
+ addTone(ctx,t,dur,midiHz(root+12),"triangle",pad?.045:.032,0,-5);
+ addTone(ctx,t,dur,midiHz(root+19),"sine",.018,.12,2);
 }
 async function buildArrangement(input,style,tempoMode,mood,notes,onProgress){
  const rate=44100,channels=2,duration=Math.min(input.duration,300),frames=Math.ceil(duration*rate);
@@ -108,23 +121,29 @@ async function buildArrangement(input,style,tempoMode,mood,notes,onProgress){
   addChord(ctx,t,Math.min(bar+.1,duration-t),root,quality,style,pianoLike);
   for(let q=0;q<4;q++){
    const bt=t+q*beat;if(bt>=duration)continue;
-   addTone(ctx,bt,Math.min(beat*.85,duration-bt),midiHz(root-12),"triangle",.09,0);
-   if(!noDrums&&(q===0||q===2||(groove===1&&q===3&&Math.random()<.45)))addKick(ctx,bt,style==="trap"?.85:.65);
-   if(!noDrums&&(q===1||q===3)&&Math.random()<drumChance)addNoise(ctx,bt,.13,style==="rock"?.25:.16,1800);
-   if(["urban","rap","trap","pop","rock","rnb"].includes(style)){
-    if(!noDrums&&(q===0||q===2||groove===2&&q===1)&&Math.random()<drumChance)addNoise(ctx,bt+beat*(groove===3?.25:.5),.055,.07,7000);
+   addTone(ctx,bt,Math.min(beat*.92,duration-bt),midiHz(root-12),"triangle",.145,0);
+   if(q===0||q===2)addTone(ctx,bt,Math.min(beat*.8,duration-bt),midiHz(root-24),"sine",.055,0);
+   if(!noDrums&&(q===0||q===2||(groove===1&&q===3&&Math.random()<.45)))addKick(ctx,bt,style==="trap"?.92:.78);
+   if(!noDrums&&(q===1||q===3))addSnare(ctx,bt+beat*.002,style==="rock"?.28:.23);
+   if(!noDrums){
+    const hatStep=beat/2;
+    for(let h=0;h<2;h++){
+     const hatTime=bt+h*hatStep;
+     if(hatTime<duration&&Math.random()<(groove===2?.72:.9))addHat(ctx,hatTime,.045+(Math.random()*.025),groove===3&&h===1);
+    }
+    if((style==="trap"||style==="urban"||style==="rap")&&Math.random()<.5)addHat(ctx,bt+beat*.75,.035);
    }
   }
   if(["worship","ballad","acoustic","cinematic"].includes(style)){
    for(let eighth=0;eighth<8;eighth++){
     const at=t+eighth*beat/2;if(at>=duration)continue;
     const note=root+scale[(eighth%3)*2%7]+12+(Math.random()<.22?12:0);
-    addTone(ctx,at,Math.min(.22,duration-at),midiHz(note),"triangle",.035,eighth%2?-.25:.25);
+    addPluck(ctx,at,Math.min(.28,duration-at),note,.052,eighth%2?-.35:.35);
    }
   }else{
    for(let eighth=0;eighth<8;eighth++){
     const at=t+eighth*beat/2;if(at>=duration)continue;
-    addTone(ctx,at,Math.min(.09,duration-at),midiHz(root+12+(eighth%3===1?7:0)+(Math.random()<.18?12:0)),"square",.012,eighth%2?-.3:.3);
+    addPluck(ctx,at,Math.min(.16,duration-at),root+12+(eighth%3===1?7:0)+(Math.random()<.18?12:0),.032,eighth%2?-.4:.4);
    }
   }
   if(b%4===0)onProgress(18+Math.round(55*b/Math.max(1,bars)),"Componiendo acordes, bajo y ritmo…");
