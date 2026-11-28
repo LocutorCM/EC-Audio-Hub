@@ -8,7 +8,7 @@ private struct PluginArtworkView: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 12)
-                .fill(LinearGradient(colors: [Color(hex: 0x285E9C), Color(hex: 0x193453)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .fill(LinearGradient(colors: [Color(hex: 0x292D40), Color(hex: 0x171A28)], startPoint: .topLeading, endPoint: .bottomTrailing))
             if let artwork {
                 Image(nsImage: artwork)
                     .resizable()
@@ -18,7 +18,7 @@ private struct PluginArtworkView: View {
             } else {
                 Image(systemName: "waveform.path")
                     .font(.system(size: 22, weight: .medium))
-                    .foregroundColor(Color(hex: 0xB7E5FF))
+                    .foregroundColor(Color(hex: 0xC7FF5E))
             }
         }
         .frame(width: 64, height: 64)
@@ -51,10 +51,10 @@ struct ClientView: View {
     @State private var pluginToUninstall: String?
     @State private var showAccountSheet = false
 
-    private let navy = Color(hex: 0x0B1424)
-    private let panel = Color(hex: 0x14243A)
-    private let blue = Color(hex: 0x398BFF)
-    private let cyan = Color(hex: 0x70C9F2)
+    private let navy = Color(hex: 0x090A12)
+    private let panel = Color(hex: 0x171A28)
+    private let blue = Color(hex: 0xC7FF5E)
+    private let cyan = Color(hex: 0xC7FF5E)
 
     var body: some View {
         HStack(spacing: 0) {
@@ -135,7 +135,7 @@ struct ClientView: View {
         VStack(alignment: .leading, spacing: 24) {
             HStack(spacing: 11) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12).fill(LinearGradient(colors: [blue, Color(hex: 0x2458B8)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    RoundedRectangle(cornerRadius: 12).fill(LinearGradient(colors: [blue, Color(hex: 0x9FBF45)], startPoint: .topLeading, endPoint: .bottomTrailing))
                     Image(systemName: "waveform").font(.system(size: 21, weight: .bold)).foregroundColor(.white)
                 }
                 .frame(width: 42, height: 42)
@@ -156,14 +156,14 @@ struct ClientView: View {
                     Text("CENTRO DE DISTRIBUCIÓN").font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundColor(.secondary)
                 }
                 Text("Tus herramientas de audio, siempre al día.")
-                    .font(.system(size: 11)).foregroundColor(Color(hex: 0xA9BBD2)).fixedSize(horizontal: false, vertical: true)
+                    .font(.system(size: 11)).foregroundColor(Color(hex: 0x969CAF)).fixedSize(horizontal: false, vertical: true)
             }
             .padding(13).background(panel.opacity(0.8)).cornerRadius(12)
             Text("EC AUDIO © 2026").font(.system(size: 8, weight: .medium, design: .monospaced)).foregroundColor(.gray)
         }
         .padding(18)
         .frame(width: 218)
-        .background(Color(hex: 0x0E1B2D))
+        .background(Color(hex: 0x0E1019))
     }
 
     private var topBar: some View {
@@ -209,17 +209,17 @@ struct ClientView: View {
     private var hero: some View {
         ZStack(alignment: .leading) {
             RoundedRectangle(cornerRadius: 18)
-                .fill(LinearGradient(colors: [Color(hex: 0x1A4C88), Color(hex: 0x17365D), Color(hex: 0x14243A)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .fill(LinearGradient(colors: [Color(hex: 0x27233A), Color(hex: 0x1B1E2E), Color(hex: 0x171A28)], startPoint: .topLeading, endPoint: .bottomTrailing))
             Circle().fill(cyan.opacity(0.12)).frame(width: 230, height: 230).blur(radius: 2).offset(x: 520, y: -55)
             Circle().stroke(Color.white.opacity(0.10), lineWidth: 1).frame(width: 190, height: 190).offset(x: 570, y: 22)
             HStack {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("EL SONIDO DE TU ESTUDIO, EN UN SOLO LUGAR")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced)).tracking(1.2).foregroundColor(Color(hex: 0xA9DDF7))
+                        .font(.system(size: 9, weight: .bold, design: .monospaced)).tracking(1.2).foregroundColor(Color(hex: 0xC7FF5E))
                     Text("Bienvenido a\nEC Audio Hub.")
                         .font(.system(size: 28, weight: .bold, design: .rounded)).foregroundColor(.white)
                     Text("Descarga, instala y mantén tus plugins actualizados.")
-                        .font(.system(size: 12)).foregroundColor(Color(hex: 0xC5D8ED))
+                        .font(.system(size: 12)).foregroundColor(Color(hex: 0xBFC4D5))
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "slider.horizontal.3")
@@ -287,10 +287,10 @@ struct ClientView: View {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 8) {
                     Text(plugin.name).font(.system(size: 14, weight: .bold)).foregroundColor(.white)
-                    if isUpdate { Text("ACTUALIZACIÓN").font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundColor(Color(hex: 0x8CCFFF)).padding(.horizontal, 7).padding(.vertical, 4).background(blue.opacity(0.18)).cornerRadius(5) }
+                    if isUpdate { Text("ACTUALIZACIÓN").font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundColor(Color(hex: 0xC7FF5E)).padding(.horizontal, 7).padding(.vertical, 4).background(blue.opacity(0.18)).cornerRadius(5) }
                 }
                 Text("Versión \(plugin.version)  ·  \(plugin.formatLabel)  ·  \(plugin.sizeLabel)")
-                    .font(.system(size: 10, weight: .medium)).foregroundColor(Color(hex: 0x9EB1C8))
+                    .font(.system(size: 10, weight: .medium)).foregroundColor(Color(hex: 0x969CAF))
                 if let installed {
                     Text("Instalado: \(installed)").font(.system(size: 9)).foregroundColor(isCurrent ? Color.green : cyan)
                 }
@@ -332,7 +332,7 @@ struct ClientView: View {
                             Text(plugin.name).font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
                             Text(plugin.format + (plugin.version.map { " · Versión " + $0 } ?? " · Instalado en este Mac"))
                                 .font(.system(size: 10)).foregroundColor(.secondary)
-                            Text(plugin.path).font(.system(size: 9)).foregroundColor(Color(hex: 0x7188A4)).lineLimit(1)
+                            Text(plugin.path).font(.system(size: 9)).foregroundColor(Color(hex: 0x747B91)).lineLimit(1)
                         }
                         Spacer()
                         Button("Desinstalar") { pluginToUninstall = plugin.path }
@@ -362,9 +362,9 @@ struct ClientView: View {
             Text("MACOS 12+  ·  INTEL & APPLE SILICON")
         }
         .font(.system(size: 9, weight: .medium, design: .monospaced))
-        .foregroundColor(Color(hex: 0x8399B4))
+        .foregroundColor(Color(hex: 0x858BA0))
         .padding(.horizontal, 22).padding(.vertical, 13)
-        .background(Color(hex: 0x0E1B2D))
+        .background(Color(hex: 0x0E1019))
     }
 
     private func sideButton(_ title: String, icon: String) -> some View {
@@ -379,7 +379,7 @@ struct ClientView: View {
                 }
             }
             .font(.system(size: 12, weight: .semibold))
-            .foregroundColor(selectedSection == title ? .white : Color(hex: 0x9EB1C8))
+            .foregroundColor(selectedSection == title ? .white : Color(hex: 0x969CAF))
             .padding(.horizontal, 12).padding(.vertical, 11)
             .background(selectedSection == title ? blue.opacity(0.22) : Color.clear)
             .overlay(alignment: .leading) {
@@ -395,9 +395,9 @@ struct BlueButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 10, weight: .bold))
-            .foregroundColor(.white)
+            .foregroundColor(Color(hex: 0x11150A))
             .padding(.horizontal, 15).padding(.vertical, 9)
-            .background(LinearGradient(colors: [Color(hex: 0x398BFF), Color(hex: 0x2869C9)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            .background(LinearGradient(colors: [Color(hex: 0xC7FF5E), Color(hex: 0x9EBE40)], startPoint: .topLeading, endPoint: .bottomTrailing))
             .cornerRadius(8)
             .opacity(configuration.isPressed ? 0.78 : 1)
     }
