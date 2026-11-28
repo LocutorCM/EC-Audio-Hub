@@ -128,18 +128,31 @@ $("generateButton").addEventListener("click",async()=>{
  busy=true;updateButton();$("resultTitle").textContent="Creando tu acompañamiento…";$("resultText").textContent="El audio se está procesando dentro de tu navegador."; $("result").classList.add("ready");
  let context;
  try{
-  if(!window.AudioContext&&!window.webkitAudioContext)throw new Error("Este navegador no admite procesamiento de audio. Abre EC Audio desde Chrome o Safari actualizado.");
+  setProgress(2,"Iniciando el generador…");
+  // Permite que el navegador pinte el estado antes de comenzar a decodificar.
+  await new Promise(resolve=>requestAnimationFrame(()=>resolve()));
+  if(!window.AudioContext&&!window.webkitAudioContext)throw new Error("Este navegador no admite procesamiento de audio. Abre EC Audio desde Chrome actualizado.");
   const AudioCtx=window.AudioContext||window.webkitAudioContext;context=new AudioCtx();
-  setProgress(5,"Leyendo tu grabación…");const data=await file.arrayBuffer();const decoded=await context.decodeAudioData(data.slice(0));
+  if(context.state==="suspended")await context.resume();
+  setProgress(6,"Leyendo tu grabación…");
+  await new Promise(resolve=>requestAnimationFrame(()=>resolve()));
+  const data=await file.arrayBuffer();const decoded=await context.decodeAudioData(data.slice(0));
   if(decoded.duration>300)throw new Error("La grabación supera el límite de 5 minutos para este generador local.");
   if(decoded.numberOfChannels>2)throw new Error("Usa una grabación mono o estéreo.");
   setProgress(14,"Analizando tonalidad aproximada…");
+  await new Promise(resolve=>requestAnimationFrame(()=>resolve()));
   const result=await buildArrangement(decoded,$("style").value,$("tempo").value,$("mood").value,$("notes").value,setProgress);
   if(outputUrl)URL.revokeObjectURL(outputUrl);outputUrl=URL.createObjectURL(result.blob);
   $("resultPlayer").src=outputUrl;$("resultPlayer").hidden=false;$("downloadLink").href=outputUrl;$("downloadLink").download=(file.name.replace(/\.[^.]+$/,"")||"EC-Audio")+"-Instrumental-"+result.key+"-"+result.bpm+"BPM.wav";$("downloadLink").classList.add("show");
   $("resultTitle").textContent="¡Tu instrumental está lista!";$("resultText").textContent="Tonalidad estimada: "+result.key+" · Tempo: "+result.bpm+" BPM · WAV estéreo 24 bits / 44.1 kHz.";
   setProgress(100,"Instrumental creada en tu dispositivo");
- }catch(e){$("resultTitle").textContent="No se pudo crear el acompañamiento";$("resultText").textContent="Revisa el mensaje de error e inténtalo nuevamente.";error(e.message||"Ocurrió un error inesperado.");}
+ }catch(e){
+  console.error("EC Audio Instrumental:",e);
+  $("resultTitle").textContent="No se pudo crear el acompañamiento";
+  $("resultText").textContent="El navegador detuvo el procesamiento. Consulta el detalle del error.";
+  const detail=e&&e.message?e.message:String(e||"Error desconocido");
+  error((e&&e.name?e.name+": ":"")+detail);
+ }
  finally{if(context)try{await context.close();}catch{}busy=false;updateButton();setTimeout(()=>$("status").classList.remove("show"),1800);}
 });
 $("generateButton").textContent="✦ CREAR MI INSTRUMENTAL";updateButton();
