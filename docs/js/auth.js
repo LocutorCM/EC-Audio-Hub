@@ -63,146 +63,44 @@ function showSignedOut() {
   authPanel.classList.remove("hidden");
 }
 async function readSubscription(user) {
-  if (API_BASE_URL) {
-    try {
-      const response = await fetch(API_BASE_URL + "/api/customer/subscription", {
-        headers: { Authorization: "Bearer " + await user.getIdToken() }
-      });
-      if (response.ok) {
-        const payload = await response.json();
-        const subscription = payload.subscription || {};
-        if (subscription.active || (subscription.plan && subscription.plan !== "trial" && subscription.status !== "inactive")) {
-          return {
-            ...subscription,
-            expiresAt: subscription.expiresAt ? new Date(subscription.expiresAt) : null,
-            remainingSeconds: subscription.active && subscription.expiresAt
-              ? Math.max(0, Math.ceil((new Date(subscription.expiresAt).getTime() - Date.now()) / 1000)) : 0,
-            trialUsed: false
-          };
-        }
+  if (!API_BASE_URL) return { status: "inactive", active: false, plan: null, expiresAt: null, remainingSeconds: 0 };
+  try {
+    const response = await fetch(API_BASE_URL + "/api/customer/subscription", {
+      headers: { Authorization: "Bearer " + await user.getIdToken() }
+    });
+    if (response.ok) {
+      const payload = await response.json();
+      const subscription = payload.subscription || {};
+      if (subscription.active && subscription.plan && subscription.plan !== "trial") {
+        return { ...subscription, expiresAt: subscription.expiresAt ? new Date(subscription.expiresAt) : null };
       }
-    } catch {}
-  }
-  const reference = doc(firestore, "ecAudioSubscriptions", user.uid);
-  const snapshot = await getDoc(reference);
-  if (!snapshot.exists()) {
-    return { status: "inactive", active: false, plan: null, expiresAt: null, remainingSeconds: 0, trialUsed: false };
-  }
-  const data = snapshot.data();
-  const startedAt = data.startedAt?.toDate?.() || null;
-  const expiresAt = startedAt ? new Date(startedAt.getTime() + 60 * 1000) : null;
-  const active = data.status === "active" && expiresAt instanceof Date && expiresAt.getTime() > Date.now();
-  return {
-    status: data.status === "active" && !active ? "expired" : (data.status || "inactive"),
-    active,
-    plan: data.plan || null,
-    expiresAt,
-    remainingSeconds: active ? Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / 1000)) : 0,
-    trialUsed: data.trialUsed === true
-  };
+    }
+  } catch {}
+  return { status: "inactive", active: false, plan: null, expiresAt: null, remainingSeconds: 0 };
 }
 
 function renderSubscription(subscription) {
   const status = $("subscriptionStatus");
   const details = $("subscriptionDetails");
-  const trialButton = $("trialBtn");
-  const billingActions = $("billingActions");
-  const portalButton = $("portalBtn");
   if (subscription.active && subscription.plan && subscription.plan !== "trial") {
     const planName = subscription.plan === "annual" ? "Anual" : subscription.plan === "monthly" ? "Mensual" : "Comercial";
-    status.textContent = "Suscripción " + planName + " activa";
+    status.textContent = "Licencia " + planName + " activa";
     details.textContent = subscription.cancelAtPeriodEnd
-      ? "Tu suscripción está programada para cancelarse al terminar el periodo actual."
+      ? "Tu licencia está programada para finalizar al terminar el periodo actual."
       : "Tu licencia comercial está activa y sincronizada con EC Audio Client.";
-    trialButton.hidden = true;
-    billingActions.hidden = false;
-    portalButton.hidden = true;
-    $("monthlyBtn").hidden = true;
-  } else if (subscription.active) {
-    status.textContent = "Prueba activa · " + subscription.remainingSeconds + " segundos restantes";
-    details.textContent = "Tu acceso de prueba está guardado y se comparte con EC Audio Client.";
-    trialButton.hidden = false;
-    $("monthlyBtn").hidden = false;
-    billingActions.hidden = false;
-    portalButton.hidden = true;
-  } else if (subscription.trialUsed) {
-    status.textContent = "Prueba gratuita utilizada";
-    details.textContent = "Esta cuenta ya utilizó su prueba de 60 segundos. Puedes elegir un plan comercial.";
-    trialButton.disabled = true;
-    trialButton.textContent = "Prueba gratuita utilizada";
-    trialButton.hidden = false;
-    billingActions.hidden = false;
-    portalButton.hidden = true;
   } else {
-    status.textContent = "Cuenta Firebase conectada · sin licencia activa";
-    details.textContent = "Puedes activar la prueba técnica o elegir una suscripción comercial.";
-    trialButton.disabled = false;
-    trialButton.textContent = "Activar prueba gratuita · $0 MXN";
-    trialButton.hidden = false;
-    billingActions.hidden = false;
-    portalButton.hidden = true;
+    status.textContent = "Cuenta conectada";
+    details.textContent = "Por ahora, las pruebas gratuitas y los planes de pago están desactivados. Anunciaremos aquí cuando vuelvan a estar disponibles.";
   }
-  trialButton.disabled = subscription.trialUsed || subscription.active;
 }
 
 async function syncCustomerSession(user) {
   try {
-    const subscription = await readSubscription(user);
-    renderSubscription(subscription);
-    await loadBillingPlans(user);
+    renderSubscription(await readSubscription(user));
     await loadCustomerDevices(user);
   } catch (error) {
-    $("subscriptionStatus").textContent = "No se pudo consultar la licencia";
-    $("subscriptionDetails").textContent = error.message || "No se pudo consultar el estado de tu cuenta.";
-    $("trialBtn").disabled = true;
-  }
-}
-
-function money(amount, currency) {
-  return new Intl.NumberFormat("es-MX", { style: "currency", currency: currency || "MXN" }).format((amount || 0) / 100);
-}
-
-async function loadBillingPlans(user) {
-  const container = $("billingActions");
-  $("annualBtn").hidden = true;
-  $("portalBtn").hidden = true;
-  if (!API_BASE_URL) {
-    container.hidden = false;
-    $("billingNotice").textContent = "La membresía Ko-fi estará disponible cuando se publique el servidor seguro de EC Audio.";
-    $("monthlyBtn").disabled = true;
-    return;
-  }
-  try {
-    const response = await fetch(API_BASE_URL + "/api/customer/billing/plans");
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || "No se pudo consultar la membresía.");
-    $("monthlyBtn").textContent = "Unirme a EC Audio en Ko-fi";
-    $("monthlyBtn").disabled = false;
-    $("billingNotice").textContent = "Plan EC Audio: $1 USD al mes mediante Ko-fi. La licencia se activa al confirmarse el pago.";
-  } catch (error) {
-    $("billingNotice").textContent = error.message || "La membresía todavía no está disponible.";
-    $("monthlyBtn").disabled = true;
-  }
-}
-
-async function startKofiMembership() {
-  const user = auth.currentUser;
-  if (!user || !API_BASE_URL) return;
-  const button = $("monthlyBtn");
-  button.disabled = true;
-  try {
-    const response = await fetch(API_BASE_URL + "/api/customer/billing/kofi-link", {
-      method: "POST",
-      headers: { Authorization: "Bearer " + await user.getIdToken() }
-    });
-    const payload = await response.json();
-    if (!response.ok || !payload.code || !payload.url) throw new Error(payload.error || "No se pudo preparar el enlace de Ko-fi.");
-    $("billingNotice").textContent = "Si pagas con un correo diferente al de tu cuenta EC Audio, copia este código y pégalo en el mensaje público de tu primera membresía en Ko-fi: " + payload.code + ". El código vence en 24 horas. Si usas el mismo correo en ambas cuentas, la vinculación se realiza automáticamente. Después de pagar, el servidor activará la licencia.";
-    window.open(payload.url, "_blank", "noopener,noreferrer");
-  } catch (error) {
-    say(error.message || "No se pudo abrir Ko-fi.", "error");
-  } finally {
-    button.disabled = false;
+    $("subscriptionStatus").textContent = "Cuenta conectada";
+    $("subscriptionDetails").textContent = "No se pudo consultar el estado de la licencia en este momento.";
   }
 }
 
@@ -241,49 +139,13 @@ async function loadCustomerDevices(user) {
   } catch {}
 }
 
-$("monthlyBtn")?.addEventListener("click", startKofiMembership);
 
 async function refreshSubscription() {
   const user = auth.currentUser;
   if (!user) return;
-  const subscription = await readSubscription(user);
-  renderSubscription(subscription);
+  renderSubscription(await readSubscription(user));
 }
 
-$("trialBtn").addEventListener("click", async () => {
-  const user = auth.currentUser;
-  if (!user || busy) return;
-  const button = $("trialBtn");
-  button.disabled = true;
-  button.textContent = "Activando…";
-  try {
-    const reference = doc(firestore, "ecAudioSubscriptions", user.uid);
-    await runTransaction(firestore, async (transaction) => {
-      const existing = await transaction.get(reference);
-      if (existing.exists()) {
-        throw new Error("La prueba gratuita de esta cuenta ya fue utilizada.");
-      }
-      transaction.set(reference, {
-        uid: user.uid,
-        email: user.email || "",
-        status: "active",
-        plan: "trial",
-        startedAt: serverTimestamp(),
-        trialUsed: true
-      });
-    });
-    await refreshSubscription();
-    say("Prueba gratuita activada durante 60 segundos. No se realizó ningún cobro.", "ok");
-  } catch (error) {
-    say(error.message || "No se pudo activar la prueba gratuita. Revisa la configuración de Cloud Firestore.", "error");
-    try { await refreshSubscription(); } catch {}
-  } finally {
-    const current = auth.currentUser;
-    if (current) {
-      try { renderSubscription(await readSubscription(current)); } catch { button.disabled = true; }
-    }
-  }
-});
 
 function friendlyError(error) {
   const code = error?.code || "";
