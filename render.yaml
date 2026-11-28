@@ -18,9 +18,7 @@ services:
       - key: HF_MUSIC_SPACE
         value: https://ace-step-ace-step-v1-5.hf.space
       - key: INSTRUMENTAL_ALLOWLIST
-        sync: false
-      - key: HF_TOKEN
-        sync: false
+        value: ""
       - key: DATA_DIR
         value: /data
       - key: JWT_SECRET
