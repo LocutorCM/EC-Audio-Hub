@@ -73,6 +73,15 @@ async function applyGain(buffer,gainDb){
   const ctx=new OfflineAudioContext(buffer.numberOfChannels,buffer.length,buffer.sampleRate),src=ctx.createBufferSource(),g=ctx.createGain();
   src.buffer=buffer;g.gain.value=Math.pow(10,gainDb/20);src.connect(g);g.connect(ctx.destination);src.start(0);return ctx.startRendering();
 }
+async function loudnessFinish(buffer){
+  const target=Number($("targetLufs").value),ceiling=Number($("truePeakTarget").value);
+  const current=measureIntegratedLUFS(buffer);
+  let gainDb=Math.max(-18,Math.min(18,target-current));
+  const tp=measureTruePeak(buffer)+gainDb;
+  if(tp>ceiling)gainDb-=tp-ceiling;
+  const output=await applyGain(buffer,gainDb);
+  return {buffer:output,blob:encodeWav24(output),lufs:measureIntegratedLUFS(output),truePeak:measureTruePeak(output)};
+}
 function stats(buffer){
   let sum=0, count=0, peak=0;
   for(let c=0;c<buffer.numberOfChannels;c++){const a=buffer.getChannelData(c);for(let i=0;i<a.length;i++){const v=a[i];sum+=v*v;count++;peak=Math.max(peak,Math.abs(v));}}
@@ -181,8 +190,9 @@ $("applyFinish").addEventListener("click",async()=>{
   if(!autoMasterBuffer)return;
   const button=$("applyFinish");button.disabled=true;button.textContent="APLICANDO…";
   try{
-    const blob=await renderFinishing(autoMasterBuffer,Number($("bassControl").value),Number($("midControl").value),Number($("highControl").value),Number($("widthControl").value));
-    if(masteredURL)URL.revokeObjectURL(masteredURL);masteredURL=URL.createObjectURL(blob);
+    const finish=await loudnessFinish(await renderFinishing(autoMasterBuffer,Number($("bassControl").value),Number($("midControl").value),Number($("highControl").value),Number($("widthControl").value)));
+    if(masteredURL)URL.revokeObjectURL(masteredURL);masteredURL=URL.createObjectURL(finish.blob);
+    $("lufsValue").textContent=finish.lufs.toFixed(1)+" LUFS-I";$("outputPeakValue").textContent=finish.truePeak.toFixed(1)+" dBTP";
     $("masteredPlayer").src=masteredURL;$("downloadLink").href=masteredURL;$("resultState").textContent="AJUSTES APLICADOS";
   }catch(e){showError("No se pudieron aplicar los ajustes: "+(e.message||"error de procesamiento"));}
   finally{button.disabled=false;button.textContent="APLICAR AJUSTES";}
@@ -220,11 +230,11 @@ $("masterButton").addEventListener("click",async()=>{
     autoMasterBuffer=result.buffer;
     ["widthControl","bassControl","midControl","highControl"].forEach(id=>$(id).value=id==="widthControl"?100:0);
     updateFinishLabels();
-    const finalBlob=await renderFinishing(autoMasterBuffer,0,0,0,100);
-    masteredURL=URL.createObjectURL(finalBlob);
+    const finish=await loudnessFinish(await renderFinishing(autoMasterBuffer,0,0,0,100));
+    masteredURL=URL.createObjectURL(finish.blob);
     $("masteredPlayer").src=masteredURL;$("downloadLink").href=masteredURL;
     $("downloadLink").download=(selectedFile.name.replace(/\.[^.]+$/,"")||"EC-Audio")+"-EC-AI-Mastered-24bit.wav";
-    $("profileValue").textContent=result.profile;$("lufsValue").textContent=result.outputLufs.toFixed(1)+" LUFS-I";$("peakValue").textContent=result.inputLufs.toFixed(1)+" LUFS-I";$("outputPeakValue").textContent=result.truePeak.toFixed(1)+" dBTP";
+    $("profileValue").textContent=result.profile;$("lufsValue").textContent=finish.lufs.toFixed(1)+" LUFS-I";$("peakValue").textContent=result.inputLufs.toFixed(1)+" LUFS-I";$("outputPeakValue").textContent=finish.truePeak.toFixed(1)+" dBTP";
     $("result").classList.add("show");$("emptyResult").hidden=true;$("resultState").textContent="MASTER COMPLETADA";$("resultState").style.color="var(--lime)";setProgress(100,"Master automática terminada · ajustes finales disponibles");
   }catch(error){showError(error.message||"No se pudo masterizar esta canción.");$("resultState").textContent="ERROR";$("resultState").style.color="#ffabb7";}
   finally{if(context)try{await context.close();}catch{}busy=false;$("masterButton").disabled=!selectedFile;$("status").classList.remove("show");}
