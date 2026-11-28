@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
+import { analyzeAndRecommend } from "./mix-doctor.js";
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const $ = (id) => document.getElementById(id);
@@ -30,6 +31,13 @@ function stats(buffer){
   let sum=0, count=0, peak=0;
   for(let c=0;c<buffer.numberOfChannels;c++){const a=buffer.getChannelData(c);for(let i=0;i<a.length;i++){const v=a[i];sum+=v*v;count++;peak=Math.max(peak,Math.abs(v));}}
   return {rms:Math.sqrt(sum/Math.max(1,count)),peak};
+}
+function applyAutoControl(id,value){const el=$(id);el.value=String(value);el.dispatchEvent(new Event("input",{bubbles:true}));}
+function showMixDoctor(a){
+  const panel=$("mixDoctor");panel.style.display="block";
+  $("mixDoctorSummary").innerHTML=a.issues.map(x=>"• "+x).join("<br>");
+  $("mixDoctorMetrics").textContent=
+    "LOW "+(a.lowShare*100).toFixed(1)+"%  ·  MID "+(a.midShare*100).toFixed(1)+"%  ·  HIGH "+(a.highShare*100).toFixed(1)+"%  ·  CREST "+a.crestDb.toFixed(1)+" dB  ·  CLIP "+a.clippingPct.toFixed(3)+"%  ·  CORR "+a.correlation.toFixed(2);
 }
 function clearMaster(){if(masteredURL)URL.revokeObjectURL(masteredURL);masteredURL=null;$("result").classList.remove("show");$("emptyResult").hidden=false;$("resultState").textContent="ESPERANDO AUDIO";$("resultState").style.color="var(--muted)";}
 function setFile(file){
