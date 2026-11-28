@@ -75,7 +75,25 @@ function installMasteringApi(app, { customerAuth }) {
       const info=await probe(inputPath);
       const before=await measure(inputPath);
       const profile=GENRES[genreId];
-      const filters=profile.eq+',acompressor=threshold=0.125:ratio=1.6:attack=25:release=220:makeup=1.0,alimiter=limit=0.891:attack=5:release=80:level=disabled,loudnorm=I='+profile.target+':TP='+profile.tp+':LRA='+profile.lra+':linear=true:print_format=summary';
+      const preFilters=profile.eq+',acompressor=threshold=0.125:ratio=1.6:attack=25:release=220:makeup=1.0,alimiter=limit=0.891:attack=5:release=80:level=disabled';
+      const loudnormBase='loudnorm=I='+profile.target+':TP='+profile.tp+':LRA='+profile.lra;
+      let loudnorm=loudnormBase+':linear=true:print_format=summary';
+      // Pass 1 measures integrated loudness and true peak after tone/dynamics processing.
+      try {
+        const analysis=await run('ffmpeg',['-hide_banner','-i',inputPath,'-af',preFilters+','+loudnormBase+':print_format=json','-f','null','-'],{timeout:Math.max(180000,Math.ceil(info.duration*12000)),maxBuffer:8*1024*1024});
+        const match=analysis.stderr.match(/\{[\s\S]*?"input_i"[\s\S]*?\}/);
+        if(match) {
+          const measured=JSON.parse(match[0]);
+          const keys=['input_i','input_tp','input_lra','input_thresh','target_offset'];
+          if(keys.every(key=>Number.isFinite(Number(measured[key])))) {
+            loudnorm=loudnormBase+':measured_I='+measured.input_i+':measured_TP='+measured.input_tp+':measured_LRA='+measured.input_lra+':measured_thresh='+measured.input_thresh+':offset='+measured.target_offset+':linear=true:print_format=summary';
+          }
+        }
+      } catch (analysisError) {
+        console.warn('[mastering] Loudness analysis fallback:',analysisError.message);
+      }
+      // Pass 2 applies measured EBU R128 normalization for a more consistent target.
+      const filters=preFilters+','+loudnorm;
       const args=['-hide_banner','-y','-i',inputPath,'-map','0:a:0','-vn','-af',filters,'-ar','48000'];
       if(format==='wav') args.push('-c:a','pcm_s24le','-f','wav');
       else args.push('-c:a','libmp3lame','-b:a','320k','-f','mp3');
