@@ -198,8 +198,11 @@ async function renderFinishing(input,bass,mid,high,width){
   const out=ctx.createGain();node.connect(out);out.connect(ctx.destination);src.start(0);
   const rendered=await ctx.startRendering(),s=stats(rendered),ceiling=Math.pow(10,-1/20);
   const gain=s.peak>ceiling?ceiling/s.peak:1;
-  if(gain<.999){const safe=createSafeOfflineContext(channels,rendered.length,rate),ss=safe.createBufferSource(),gg=safe.createGain();ss.buffer=rendered;gg.gain.value=gain;ss.connect(gg);gg.connect(safe.destination);ss.start(0);return encodeWav24(await safe.startRendering());}
-  return encodeWav24(rendered);
+  // Keep the finishing pipeline in AudioBuffer form. loudnessFinish() needs
+  // sampleRate, length, channel data and numberOfChannels; returning a Blob here
+  // caused undefined frame counts and the misleading "cantidad de muestras" error.
+  if(gain<.999){const safe=createSafeOfflineContext(channels,rendered.length,rate),ss=safe.createBufferSource(),gg=safe.createGain();ss.buffer=rendered;gg.gain.value=gain;ss.connect(gg);gg.connect(safe.destination);ss.start(0);return await safe.startRendering();}
+  return rendered;
 }
 ["widthControl","bassControl","midControl","highControl"].forEach(id=>$(id).addEventListener("input",updateFinishLabels));
 $("applyFinish").addEventListener("click",async()=>{
