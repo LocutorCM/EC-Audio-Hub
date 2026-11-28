@@ -39,7 +39,8 @@ footer{border-top:1px solid #ffffff12;padding:24px 0;color:#777e91;font-size:9px
 </section>
 <aside class="panel"><h2>Tu producción</h2><p class="muted">El audio se guarda en el motor local y puedes descargarlo desde aquí.</p><div class="result" id="result"><b id="resultTitle">Esperando tu primera generación</b><span id="resultText">Conecta el motor local y crea tu instrumental.</span></div><audio id="resultAudio" controls hidden></audio><a class="download" id="download" download="EC-Audio-Instrumental.wav">↓ DESCARGAR INSTRUMENTAL</a>
 <div class="tip"><b>01 / Conexión local</b><span>La página se conecta a http://127.0.0.1:8001. Mantén abierta la ventana del motor ACE-Step mientras generas.</span></div><div class="tip"><b>02 / Privacidad</b><span>Los archivos de voz se envían únicamente al servidor local de tu computadora. No se suben a Hugging Face ni a Render.</span></div><div class="tip"><b>03 / Rendimiento</b><span>La velocidad y duración dependen de la memoria RAM, la GPU y el modelo descargado.</span></div></aside>
-</div></main>
+</div><div class="tip"><b>INSTALACIÓN DEL MODELO LOCAL</b><span>Para descargar ACE-Step 1.5 y arrancar el motor en tu computadora, sigue la <a href="./AI-INSTRUMENTAL-SETUP.md" target="_blank" rel="noopener" style="color:var(--lime);text-decoration:underline">guía de instalación EC Audio</a>. El modelo requiere varios GB y hardware compatible.</span></div>
+</main>
 <footer class="wrap"><span>EC AUDIO · SHAPE YOUR SOUND</span><span>LOCAL AI MUSIC ENGINE</span></footer>
 <script type="module">
 const API='http://127.0.0.1:8001';
