@@ -6,11 +6,6 @@ const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const $ = (id) => document.getElementById(id);
 let selectedFile = null, originalURL = null, masteredURL = null, busy = false, signedInUser = null;
-["compRatio","stereoWidth","eqLow","eqHigh"].forEach(id=>$(id).addEventListener("input",()=>{
- const v=$(id).value;
- const target={compRatio:"ratioValue",stereoWidth:"widthValue",eqLow:"lowValue",eqHigh:"highValue"}[id];
- $(target).textContent=id==="compRatio"?Number(v).toFixed(1)+":1":id==="stereoWidth"?v+"%":Number(v).toFixed(1)+" dB";
-}));
 const profiles = {
   auto: {name:"Adaptativo EC", target:-14, hp:28, low:0, body:0, presence:0.5, air:0.5, threshold:-20, ratio:2.3},
   urban:{name:"Urbano / Reggaetón",target:-10.5,hp:30,low:0.8,body:0.2,presence:0.4,air:0.8,threshold:-19,ratio:2.8},
@@ -32,7 +27,6 @@ function stats(buffer){
   for(let c=0;c<buffer.numberOfChannels;c++){const a=buffer.getChannelData(c);for(let i=0;i<a.length;i++){const v=a[i];sum+=v*v;count++;peak=Math.max(peak,Math.abs(v));}}
   return {rms:Math.sqrt(sum/Math.max(1,count)),peak};
 }
-function applyAutoControl(id,value){const el=$(id);el.value=String(value);el.dispatchEvent(new Event("input",{bubbles:true}));}
 function showMixDoctor(a){
   const panel=$("mixDoctor");panel.style.display="block";
   $("mixDoctorSummary").innerHTML=a.issues.map(x=>"• "+x).join("<br>");
@@ -84,23 +78,21 @@ async function renderMaster(input,profile,onProgress){
   if(profile.body)connectFilter("peaking",260,profile.body,0.85);
   if(profile.presence)connectFilter("peaking",3200,profile.presence,0.9);
   if(profile.air)connectFilter("highshelf",10500,profile.air,0.7);
-  const lowUser=offline.createBiquadFilter();lowUser.type="lowshelf";lowUser.frequency.value=120;lowUser.gain.value=Number($("eqLow").value)||0;node.connect(lowUser);node=lowUser;
-  const highUser=offline.createBiquadFilter();highUser.type="highshelf";highUser.frequency.value=9000;highUser.gain.value=Number($("eqHigh").value)||0;node.connect(highUser);node=highUser;
-  const compressor=offline.createDynamicsCompressor();compressor.threshold.value=profile.threshold;compressor.knee.value=12;compressor.ratio.value=Number($("compRatio").value)||profile.ratio;compressor.attack.value=0.012;compressor.release.value=0.18;node.connect(compressor);node=compressor;
+  const compressor=offline.createDynamicsCompressor();compressor.threshold.value=profile.threshold;compressor.knee.value=12;compressor.ratio.value=profile.ratio;compressor.attack.value=0.012;compressor.release.value=0.18;node.connect(compressor);node=compressor;
   const limiter=offline.createDynamicsCompressor();limiter.threshold.value=-3;limiter.knee.value=0;limiter.ratio.value=16;limiter.attack.value=0.002;limiter.release.value=0.08;node.connect(limiter);node=limiter;
   const gain=offline.createGain();gain.gain.value=1;node.connect(gain);gain.connect(offline.destination);source.start(0);
   onProgress(32,"Aplicando ecualización y control dinámico…");
-  const rendered=await offline.startRendering();onProgress(76,"Midiendo loudness y pico…");
-  const s=stats(rendered);const targetRms=Math.pow(10,profile.target/20);
+  const rendered=await offline.startRendering();onProgress(76,"Midiendo nivel y preparando limitación final…");
+  const stereoAdjusted=applyStereoWidth(rendered,profile.width ?? 1);
+  const s=stats(stereoAdjusted);const targetRms=Math.pow(10,profile.target/20);
   let multiplier=s.rms>0?targetRms/s.rms:1;multiplier=Math.min(multiplier,Math.pow(10,12/20));
   const ceiling=Math.pow(10,-1/20);if(s.peak*multiplier>ceiling)multiplier=ceiling/Math.max(s.peak,1e-9);
-  const normalized=new OfflineAudioContext(channels,rendered.length,rate);const src=normalized.createBufferSource();src.buffer=rendered;const g=normalized.createGain();g.gain.value=multiplier;src.connect(g);g.connect(normalized.destination);src.start(0);
+  const normalized=new OfflineAudioContext(channels,rendered.length,rate);const src=normalized.createBufferSource();src.buffer=stereoAdjusted;const g=normalized.createGain();g.gain.value=multiplier;src.connect(g);g.connect(normalized.destination);src.start(0);
   const normalizedBuffer=await normalized.startRendering();
-  onProgress(88,"Ajustando imagen estéreo…");
-  const finalBuffer=applyStereoWidth(normalizedBuffer,Number($("stereoWidth").value)/100);
+  onProgress(88,"Verificando pico de salida…");
   onProgress(94,"Preparando WAV de 24 bits…");
-  const finalStats=stats(finalBuffer);
-  return {blob:encodeWav24(finalBuffer),inputPeak:db(stats(input).peak),outputPeak:db(finalStats.peak),profile:profile.name,target:profile.target};
+  const finalStats=stats(normalizedBuffer);
+  return {blob:encodeWav24(normalizedBuffer),inputPeak:db(stats(input).peak),outputPeak:db(finalStats.peak),profile:profile.name,target:profile.target,analysis:profile.analysis};
 }
 $("masterButton").addEventListener("click",async()=>{
   if(!selectedFile||busy)return;clearError();if(!signedInUser){window.location.href="./account.html?return=mastering";return;}busy=true;$("masterButton").disabled=true;$("resultState").textContent="PROCESANDO";
@@ -113,7 +105,19 @@ $("masterButton").addEventListener("click",async()=>{
     const decoded=await context.decodeAudioData(bytes.slice(0));
     if(decoded.duration>600)throw new Error("La canción supera el límite de 10 minutos para el procesamiento local.");
     if(decoded.numberOfChannels>2)throw new Error("El archivo tiene más de dos canales. Exporta una mezcla estéreo e inténtalo de nuevo.");
-    const profile=profiles[$("genre").value]||profiles.auto;
+    setProgress(20,"EC Mix Doctor: analizando espectro, dinámica y estéreo…");
+    const analysis=await analyzeAndRecommend(decoded);
+    showMixDoctor(analysis);
+    const base=profiles[$("genre").value]||profiles.auto;
+    const profile={...base};
+    // The analysis drives the mastering decisions; genre is only a gentle tonal starting point.
+    profile.low=Math.max(-2.5,Math.min(2.5,base.low+analysis.lowDb));
+    profile.air=Math.max(-2.5,Math.min(2.5,base.air+analysis.highDb));
+    profile.ratio=Math.max(1.5,Math.min(4,analysis.ratio));
+    profile.threshold=Math.max(-28,Math.min(-16,base.threshold+(analysis.crestDb>12?-2:analysis.crestDb<7?2:0)));
+    profile.width=Math.max(.75,Math.min(1.12,analysis.width/100));
+    if($("genre").value==="auto")profile.target=analysis.crestDb>12?-14.5:-13.5;
+    profile.analysis=analysis;
     const result=await renderMaster(decoded,profile,setProgress);
     if(masteredURL)URL.revokeObjectURL(masteredURL);masteredURL=URL.createObjectURL(result.blob);
     $("masteredPlayer").src=masteredURL;$("downloadLink").href=masteredURL;
