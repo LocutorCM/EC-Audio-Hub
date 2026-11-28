@@ -39,7 +39,7 @@ La web incluye un área de masterización local en el navegador con perfiles DSP
 
 ## EC AI Instrumental Creator
 
-La web incluye un generador de acompañamientos a partir de una voz a capela, con estilos musicales, tempo y ambiente configurables. Usa el modelo ACE-Step Audio-to-Audio mediante fal.ai, con autenticación del cliente Firebase y la clave privada `FAL_KEY` en Render. Para activarlo, crea una API key en fal.ai y guárdala en Render como variable de entorno `FAL_KEY` (nunca en el repositorio ni en el navegador). El audio de referencia se envía al almacenamiento del proveedor para generar la pista; la página solicita consentimiento antes de enviar. El proveedor puede cobrar por generación según su tarifa vigente. El modelo usa la voz como referencia musical, pero el resultado puede no coincidir exactamente con cada nota o compás.
+La web genera instrumentales con ACE-Step Audio-to-Audio en fal.ai y prepara pistas separadas mediante Mureka Stem Separation. Incluye sesión Firebase, consentimiento antes de enviar la voz, progreso por etapas, descarga de la mezcla completa y ZIP de stems. Requiere la clave privada `FAL_KEY` en Render; nunca se publica en GitHub ni en el navegador. Consulta `docs/AI-INSTRUMENTAL-SETUP.md` para activar el motor, conocer límites y revisar los costos vigentes de los proveedores. La separación devuelve las pistas que el modelo logra aislar; no garantiza una pista individual para cada instrumento ni informa progreso interno por instrumento.
 
 ## Compilar apps macOS
 
