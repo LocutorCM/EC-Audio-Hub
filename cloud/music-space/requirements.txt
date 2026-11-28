@@ -1,0 +1,6 @@
+gradio==5.49.1
+spaces
+git+https://github.com/ace-step/ACE-Step-1.5.git
+demucs
+librosa
+soundfile
