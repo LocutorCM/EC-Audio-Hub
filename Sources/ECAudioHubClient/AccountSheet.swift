@@ -42,15 +42,28 @@ struct AccountSheet: View {
                     Text("Crear cuenta").tag(true)
                 }
                 .pickerStyle(.segmented)
+                .tint(Color(hex: 0xC7FF5E))
 
                 if isRegister {
                     TextField("Nombre", text: $displayName)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.plain)
+                        .padding(12)
+                        .background(Color(hex: 0x0B0D16))
+                        .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color(hex: 0x34384E), lineWidth: 1))
+                        .cornerRadius(9)
                 }
                 TextField("Correo electrónico", text: $email)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
+                    .padding(12)
+                    .background(Color(hex: 0x0B0D16))
+                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color(hex: 0x34384E), lineWidth: 1))
+                    .cornerRadius(9)
                 SecureField("Contraseña (mínimo 10 caracteres)", text: $password)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
+                    .padding(12)
+                    .background(Color(hex: 0x0B0D16))
+                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color(hex: 0x34384E), lineWidth: 1))
+                    .cornerRadius(9)
 
                 Button(isRegister ? "Crear cuenta" : "Iniciar sesión") {
                     Task {
