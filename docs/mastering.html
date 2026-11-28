@@ -26,7 +26,7 @@ footer{border-top:1px solid #ffffff12;padding:24px 0;color:#777e91;font-size:9px
 <body>
 <header class="wrap"><a class="brand" href="./"><span class="logo">EC</span><span>EC AUDIO</span></a><div style="display:flex;align-items:center;gap:18px"><a class="back" href="./account.html">Mi cuenta ↗</a><a class="back" href="./">← Volver a EC Audio</a></div></header>
 <main class="wrap">
-<div class="hero"><div class="eyebrow">EC AUDIO / INTELLIGENT AUDIO WORKFLOW</div><h1>EC AI <span>MASTERING</span></h1><p>Masteriza desde tu navegador. El procesamiento se realiza en tu dispositivo, sin subir la canción a un servidor ni instalar programas.</p></div>
+<div class="hero"><div class="eyebrow">EC AUDIO / INTELLIGENT AUDIO WORKFLOW</div><h1>EC AI <span>MASTERING</span></h1><p>Análisis y masterización automática en tu navegador. EC analiza la mezcla y ajusta ecualización, compresión, nivel y estéreo directamente en tu dispositivo.</p></div>
 <div class="workspace">
 <section class="panel">
 <h2>01 / Tu canción</h2><p class="muted">Sube el archivo original de tu mezcla. Disponible desde teléfono, tablet o computadora.</p>
@@ -34,13 +34,9 @@ footer{border-top:1px solid #ffffff12;padding:24px 0;color:#777e91;font-size:9px
 <div class="fileline" id="fileLine" hidden><div class="fileicon">♫</div><div class="filemeta"><b id="fileName"></b><small id="fileSize"></small></div><button class="remove" id="removeFile" type="button" aria-label="Quitar archivo">×</button></div>
 <audio id="originalPlayer" controls hidden style="width:100%;height:38px;margin-top:12px"></audio>
 <div class="formrow"><div><label for="genre">Género musical</label><select id="genre"><option value="auto">Automático / equilibrado</option><option value="urban">Urbano / reggaetón</option><option value="rap">Rap / hip-hop</option><option value="pop">Pop</option><option value="rock">Rock</option><option value="worship">Adoración / música cristiana</option><option value="ballad">Balada</option><option value="electronic">Electrónica</option><option value="acoustic">Acústica</option></select></div><div><label for="format">Formato de salida</label><select id="format"><option value="wav">WAV · 24-bit / 48 kHz</option></select></div></div>
-<div class="formrow">
-<div><label for="compRatio">Compresión · ratio <output id="ratioValue">2.3:1</output></label><input id="compRatio" type="range" min="1" max="6" step=".1" value="2.3" style="width:100%;accent-color:var(--lime)"></div>
-<div><label for="stereoWidth">Ampliación estéreo <output id="widthValue">100%</output></label><input id="stereoWidth" type="range" min="0" max="150" step="1" value="100" style="width:100%;accent-color:var(--lime)"></div>
-</div>
-<div class="formrow">
-<div><label for="eqLow">EQ graves <output id="lowValue">0 dB</output></label><input id="eqLow" type="range" min="-4" max="4" step=".1" value="0" style="width:100%;accent-color:var(--lime)"></div>
-<div><label for="eqHigh">EQ brillo <output id="highValue">0 dB</output></label><input id="eqHigh" type="range" min="-4" max="4" step=".1" value="0" style="width:100%;accent-color:var(--lime)"></div>
+<div style="margin-top:18px;padding:15px;border:1px solid #c7ff5e35;border-radius:12px;background:#c7ff5e08">
+ <div style="font:10px 'DM Mono',monospace;letter-spacing:.12em;color:var(--lime);margin-bottom:8px">EC AUTO MASTER ENGINE</div>
+ <div style="font-size:11px;line-height:1.8;color:#c8ccda">El motor analiza el balance tonal, la dinámica, los picos y la correlación estéreo. Después ajusta automáticamente la ecualización, la compresión, el nivel y la anchura estéreo. No necesitas mover controles.</div>
 </div>
 <button class="primary" id="masterButton" type="button" disabled>✦ MASTERIZAR MI CANCIÓN</button>
 <p class="note">Procesamiento local en tu navegador. El archivo original no se envía a EC Audio ni a Render.</p>
@@ -57,13 +53,13 @@ footer{border-top:1px solid #ffffff12;padding:24px 0;color:#777e91;font-size:9px
 <div class="result" id="result">
 <div class="metric"><small>PERFIL APLICADO</small><b id="profileValue" style="font-size:13px">—</b></div>
 <audio id="masteredPlayer" controls></audio>
-<div class="metrics"><div class="metric"><small>OBJETIVO DE NIVEL</small><b id="lufsValue">—</b></div><div class="metric"><small>PEAK DE ENTRADA</small><b id="peakValue">—</b></div><div class="metric"><small>PEAK DE SALIDA</small><b id="outputPeakValue">—</b></div></div>
+<div class="metrics"><div class="metric"><small>OBJETIVO RMS APROX.</small><b id="lufsValue">—</b></div><div class="metric"><small>PEAK DE ENTRADA</small><b id="peakValue">—</b></div><div class="metric"><small>PEAK DE SALIDA</small><b id="outputPeakValue">—</b></div></div>
 <a class="download" id="downloadLink" href="#" download>↓ DESCARGAR MASTER</a>
 </div>
 <div id="emptyResult" style="border:1px dashed #34384e;border-radius:13px;padding:35px 18px;text-align:center;color:#777f94"><div style="font-size:30px;margin-bottom:12px">◉</div><b style="display:block;color:#c8ccda;font-size:12px">Tu master aparecerá aquí</b><span style="font-size:10px;line-height:1.8;display:block;margin-top:8px">Sube tu canción y pulsa masterizar para comenzar.</span></div>
 </section>
 </div>
-<div class="tips"><div class="tip"><b>EC MIX DOCTOR</b><span>Analiza distribución de energía, dinámica, clipping y correlación estéreo para recomendar ajustes automáticos.</span></div><div class="tip"><b>PROCESAMIENTO ADAPTATIVO</b><span>Ecualización por perfil, compresión, limitación de pico y ajuste de nivel RMS aproximado.</span></div><div class="tip"><b>EXPORTACIÓN</b><span>WAV PCM estéreo de 24 bits a 48 kHz.</span></div></div>
+<div class="tips"><div class="tip"><b>EC MIX DOCTOR</b><span>Analiza balance de frecuencias, dinámica, clipping y correlación estéreo antes de procesar.</span></div><div class="tip"><b>PROCESAMIENTO ADAPTATIVO</b><span>Ecualización tonal adaptativa, compresión dinámica, limitación de picos y normalización RMS conservadora.</span></div><div class="tip"><b>EXPORTACIÓN</b><span>WAV PCM de 24 bits a 48 kHz. El nivel se informa como RMS, no como LUFS medidos.</span></div></div>
 </main>
 <footer class="wrap"><span>EC AUDIO · SHAPE YOUR SOUND</span><span>Procesamiento local adaptativo. Los resultados dependen de la mezcla original y de la capacidad del dispositivo.</span></footer>
 <script type="module" src="./js/mastering.js"></script>
