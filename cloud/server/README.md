@@ -45,3 +45,15 @@ Supported file types include VST3, AU, AAX, PKG, DMG, ZIP, APP, CLAP, and common
 - The server records the original filename, byte size, uploader, upload time, and SHA-256.
 - Keep backups of /data/uploads and /data/ec-audio.sqlite.
 - Never commit .env or real credentials to GitHub.
+
+## Online instrumental generation
+
+The server exposes an authenticated ACE-Step ZeroGPU bridge:
+- `GET /api/instrumental/status`
+- `POST /api/instrumental/generate` (multipart fields: `prompt`, `bpm`, `duration`; optional `voice`)
+- `GET /api/instrumental/jobs/:jobId`
+- `GET /api/instrumental/jobs/:jobId/audio`
+
+Configure `INSTRUMENTAL_ALLOWLIST` in Render as a comma-separated list of Firebase customer email addresses allowed to generate. If it is empty, the server falls back to `ADMIN_EMAIL`. Each authorized customer can submit up to 3 generations per rolling hour. `HF_MUSIC_SPACE` defaults to the official ACE-Step v1.5 Space URL; `HF_TOKEN` is optional and should only be set as a private Render secret if the Space requires authenticated access.
+
+The online provider uses the public ACE-Step ZeroGPU Space and its asynchronous REST API. Free shared GPU availability, queue times, and daily quotas are controlled by Hugging Face and are not guaranteed. Online generation currently returns a complete mix of up to 60 seconds; automatic stem separation is not included in this first online path.
