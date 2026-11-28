@@ -7,10 +7,10 @@ El backend de cuentas y licencias necesita ejecutarse como servicio Node/Docker 
 El archivo `render.yaml` define el servicio Docker, comprobación de salud, variables privadas y un disco persistente de 1 GB montado en `/data`.
 
 1. Conecta la cuenta de Render con el repositorio `LocutorCM/EC-Audio-Hub`.
-2. En Render, crea un **Blueprint** desde ese repositorio y selecciona la rama `feature/customer-accounts-subscriptions` mientras revisas el PR.
+2. En Render, crea un **Blueprint** desde ese repositorio y selecciona la rama `main`.
 3. Render detectará `render.yaml`. Confirma la creación del servicio `ec-audio-cloud`.
-4. Introduce `ADMIN_EMAIL`, `ADMIN_PASSWORD` y `FIREBASE_API_KEY` cuando Render los solicite. `FIREBASE_PROJECT_ID` ya está configurado como `ec-audio-accounts`. Render genera `JWT_SECRET`.
-5. Espera a que el despliegue termine y abre `https://<servicio>.onrender.com/health`. Debe responder JSON con `ok: true`, `customerAccounts: true`, `firebaseConfigured: true` y `demoTrialSeconds: 60`.
+4. Introduce `ADMIN_EMAIL`, `ADMIN_PASSWORD` y `FIREBASE_API_KEY` cuando Render los solicite. `FIREBASE_PROJECT_ID` ya está configurado como `ec-audio-accounts`. Render genera `JWT_SECRET`. `HF_MUSIC_SPACE` apunta al Space oficial de ACE-Step ZeroGPU. `INSTRUMENTAL_ALLOWLIST` puede permanecer vacío al inicio (solo se autoriza `ADMIN_EMAIL`); después puedes agregar correos de cuentas Firebase separados por comas. `HF_TOKEN` es opcional y solo se necesita si Hugging Face exige autenticación para el Space.
+5. Espera a que el despliegue termine y abre `https://<servicio>.onrender.com/health`. Debe responder JSON con `ok: true`, `customerAccounts: true`, `firebaseConfigured: true` y `demoTrialSeconds: 60`. También quedarán disponibles `GET /api/instrumental/status`, `POST /api/instrumental/generate`, `GET /api/instrumental/jobs/:jobId` y `GET /api/instrumental/jobs/:jobId/audio` (todos requieren sesión Firebase).
 6. Copia el dominio HTTPS generado por Render. En `docs/js/api-config.js`, asigna ese origen a `API_BASE_URL` (sin barra final), guarda el cambio y publica GitHub Pages.
 7. En EC Audio Client Hub, abre **Cuenta**, pega el mismo origen HTTPS en **Dirección del servidor** e inicia sesión con el mismo correo y contraseña de Firebase que usas en la web. El Client intercambia el ID token de Firebase por una sesión de EC Audio.
 
