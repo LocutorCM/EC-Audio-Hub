@@ -39,7 +39,7 @@ jobs:
           iconutil -c icns dist/ECAppIcon.iconset -o dist/ECAppIcon.icns
       - name: Package EC Audio Hub Admin
         run: |
-          mkdir -p "dist/EC Audio Hub Admin.app/Contents/MacOS"
+          mkdir -p "dist/EC Audio Hub Admin.app/Contents/MacOS" "dist/EC Audio Hub Admin.app/Contents/Resources"
           cat > "dist/EC Audio Hub Admin.app/Contents/Info.plist" <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -61,7 +61,7 @@ jobs:
 
       - name: Package EC Audio Hub Client
         run: |
-          mkdir -p "dist/EC Audio Hub Client.app/Contents/MacOS"
+          mkdir -p "dist/EC Audio Hub Client.app/Contents/MacOS" "dist/EC Audio Hub Client.app/Contents/Resources"
           cat > "dist/EC Audio Hub Client.app/Contents/Info.plist" <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
