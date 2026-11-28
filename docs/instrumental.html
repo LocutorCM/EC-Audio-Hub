@@ -36,8 +36,8 @@ footer{border-top:1px solid #ffffff12;padding:24px 0;color:#777e91;font-size:9px
 <label class="field" for="mood">Ambiente / emoción</label><input id="mood" type="text" maxlength="120" placeholder="Ej. emotiva, esperanzadora, íntima y épica">
 <label class="field" for="notes">Indicaciones adicionales (opcional)</label><textarea id="notes" maxlength="500" placeholder="Ej. comienza solo con piano, añade batería en el coro, guitarras ambientales..."></textarea>
 <div class="notice">Procesamiento 100% local: tu voz no se sube a ningún servidor. Se analiza en tu dispositivo y se usa como referencia para estimar la tonalidad. La instrumental se sintetiza aquí mismo.</div>
-<button class="primary" id="generateButton" disabled>✦ CREAR MI INSTRUMENTAL</button>
-<p class="muted" style="margin:12px 0 0;text-align:center">Necesitas iniciar sesión. El procesamiento se realiza en tu navegador; no requiere Render ni servicios externos.</p>
+<button class="primary" id="generateButton">✦ CREAR MI INSTRUMENTAL</button>
+<p class="muted" style="margin:12px 0 0;text-align:center">Sube tu voz para habilitar el botón. El procesamiento se realiza en tu navegador; no necesitas iniciar sesión ni conectarte a un servidor.</p>
 <div class="status" id="status"><div class="statushead"><span id="statusText">Preparando audio…</span><b id="statusPercent">0%</b></div><div class="progress"><i id="progressBar"></i></div></div>
 <div class="error" id="errorBox" role="alert"></div>
 </section>
