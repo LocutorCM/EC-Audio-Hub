@@ -151,7 +151,7 @@ async function pollJob(jobId) {
       $("downloadMix").download = (selectedFile?.name.replace(/\.[^.]+$/, "") || "EC-Audio") + "-EC-AI-Instrumental" + (job.audioExtension || ".mp3");
       $("downloadMix").classList.add("show");
       if (job.stemsDownloadUrl) {
-        $("downloadStems").href = job.stemsDownloadUrl;
+        $("downloadStems").href = API_BASE_URL + job.stemsDownloadUrl;
         $("downloadStems").classList.add("show");
       }
       $("result").classList.add("ready");
@@ -226,7 +226,7 @@ onAuthStateChanged(auth, async user => {
     apiAvailable = payload.available === true;
     $("authMessage").textContent = apiAvailable
       ? "Sesión activa · Motor de IA conectado · Límite de 3 generaciones por hora."
-      : "Sesión activa, pero falta configurar FAL_KEY en el servidor EC Audio.";
+      : "Sesión activa, pero falta configurar HF_TOKEN y HF_MUSIC_SPACE en el servidor EC Audio.";
   } catch (error) {
     apiAvailable = false;
     $("authMessage").textContent = error.message || "No se pudo conectar con EC Audio Cloud.";
