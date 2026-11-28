@@ -117,7 +117,10 @@ final class ClientLibrary: ObservableObject {
             var found: [HubPlugin] = []
 
             for release in releases where !release.draft && !release.prerelease {
-                let metadata = parseMetadata(release.body ?? "")
+                let releaseBody = release.body ?? ""
+                // El Client consume el mismo canal de publicaciones del Admin Hub.
+                guard releaseBody.contains("EC_AUDIO_PLUGIN_RELEASE") else { continue }
+                let metadata = parseMetadata(releaseBody)
                 guard metadata["plugin_name"] != nil,
                       let fileName = metadata["file_name"],
                       let checksum = metadata["sha256"] else { continue }
@@ -253,15 +256,12 @@ final class ClientLibrary: ObservableObject {
     private func installPluginFile(_ downloadedURL: URL, plugin: HubPlugin) throws -> [URL]? {
         let fileManager = FileManager.default
         let ext = plugin.fileExtension
-        let installRoot = fileManager.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Audio/Plug-Ins", isDirectory: true)
+        let installRoot = URL(fileURLWithPath: "/Library/Audio/Plug-Ins", isDirectory: true)
 
         if ext == "vst3" || ext == "component" {
             let folder = installRoot.appendingPathComponent(ext == "vst3" ? "VST3" : "Components", isDirectory: true)
-            try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
             let destination = folder.appendingPathComponent(plugin.fileName, isDirectory: true)
-            if fileManager.fileExists(atPath: destination.path) { try fileManager.removeItem(at: destination) }
-            try fileManager.copyItem(at: downloadedURL, to: destination)
+            try runPrivilegedShellCommand("mkdir -p \(shellQuote(folder.path)) && rm -rf \(shellQuote(destination.path)) && ditto \(shellQuote(downloadedURL.path)) \(shellQuote(destination.path))")
             return [destination]
         }
 
@@ -295,19 +295,15 @@ final class ClientLibrary: ObservableObject {
         for bundle in bundles {
             let suffix = bundle.pathExtension.lowercased()
             let folder = installRoot.appendingPathComponent(suffix == "vst3" ? "VST3" : "Components", isDirectory: true)
-            try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
             let destination = folder.appendingPathComponent(bundle.lastPathComponent, isDirectory: true)
-            if fileManager.fileExists(atPath: destination.path) { try fileManager.removeItem(at: destination) }
-            try fileManager.copyItem(at: bundle, to: destination)
+            try runPrivilegedShellCommand("mkdir -p \(shellQuote(folder.path)) && rm -rf \(shellQuote(destination.path)) && ditto \(shellQuote(bundle.path)) \(shellQuote(destination.path))")
             installedBundles.append(destination)
         }
         return installedBundles
     }
 
     var detectedInstalledPlugins: [InstalledPlugin] {
-        let root = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Audio/Plug-Ins", isDirectory: true)
-            .standardizedFileURL
+        let root = URL(fileURLWithPath: "/Library/Audio/Plug-Ins", isDirectory: true).standardizedFileURL
         var result: [InstalledPlugin] = []
         for folderName in ["VST3", "Components"] {
             let folder = root.appendingPathComponent(folderName, isDirectory: true)
@@ -334,8 +330,7 @@ final class ClientLibrary: ObservableObject {
 
     func uninstallBundle(at rawPath: String) throws {
         let fileManager = FileManager.default
-        let root = fileManager.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Audio/Plug-Ins", isDirectory: true).standardizedFileURL
+        let root = URL(fileURLWithPath: "/Library/Audio/Plug-Ins", isDirectory: true).standardizedFileURL
         let url = URL(fileURLWithPath: rawPath).standardizedFileURL
         let parent = url.deletingLastPathComponent()
         let allowedParents = [
@@ -349,7 +344,7 @@ final class ClientLibrary: ObservableObject {
         guard fileManager.fileExists(atPath: url.path) else {
             throw ClientInstallError.installedBundleNotFound(url.lastPathComponent)
         }
-        try fileManager.removeItem(at: url)
+        try runPrivilegedShellCommand("rm -rf \(shellQuote(url.path))")
         for (name, paths) in Array(installedPaths) {
             let remaining = paths.filter { $0 != url.path }
             if remaining.isEmpty {
@@ -366,7 +361,7 @@ final class ClientLibrary: ObservableObject {
 
     func uninstallPlugin(named name: String) throws {
         let fileManager = FileManager.default
-        let root = fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Audio/Plug-Ins", isDirectory: true).standardizedFileURL
+        let root = URL(fileURLWithPath: "/Library/Audio/Plug-Ins", isDirectory: true).standardizedFileURL
         var paths = installedPaths[name] ?? []
         // Older Client versions did not store exact bundle paths; try matching bundle names.
         if paths.isEmpty {
@@ -757,8 +752,7 @@ final class ClientLibrary: ObservableObject {
     }
 
     private func pluginInstallRoot() -> URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Audio/Plug-Ins", isDirectory: true).standardizedFileURL
+        URL(fileURLWithPath: "/Library/Audio/Plug-Ins", isDirectory: true).standardizedFileURL
     }
 
     private func isManagedPluginPath(_ url: URL) -> Bool {
@@ -780,9 +774,9 @@ final class ClientLibrary: ObservableObject {
             let folder = manager.homeDirectoryForCurrentUser
                 .appendingPathComponent("Library/Application Support/EC Audio Hub/Suspended Plugins", isDirectory: true)
                 .appendingPathComponent(UUID().uuidString, isDirectory: true)
-            try manager.createDirectory(at: folder, withIntermediateDirectories: true)
             let destination = folder.appendingPathComponent(original.lastPathComponent, isDirectory: true)
-            try manager.moveItem(at: original, to: destination)
+            try manager.createDirectory(at: folder, withIntermediateDirectories: true)
+            try runPrivilegedShellCommand("mv \(shellQuote(original.path)) \(shellQuote(destination.path))")
             suspended[original.path] = destination.path
             UserDefaults.standard.set(suspended, forKey: suspendedPluginsKey)
         }
@@ -805,8 +799,7 @@ final class ClientLibrary: ObservableObject {
                 // Never overwrite a file the user or another installer placed there.
                 continue
             }
-            try manager.createDirectory(at: original.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try manager.moveItem(at: source, to: original)
+            try runPrivilegedShellCommand("mkdir -p \(shellQuote(original.deletingLastPathComponent().path)) && mv \(shellQuote(source.path)) \(shellQuote(original.path))")
             try? manager.removeItem(at: source.deletingLastPathComponent())
             suspended.removeValue(forKey: originalPath)
             UserDefaults.standard.set(suspended, forKey: suspendedPluginsKey)
@@ -821,6 +814,31 @@ final class ClientLibrary: ObservableObject {
         let allowed = parent == root.appendingPathComponent("VST3", isDirectory: true) ||
             parent == root.appendingPathComponent("Components", isDirectory: true)
         return allowed && (url.pathExtension.lowercased() == "vst3" || url.pathExtension.lowercased() == "component")
+    }
+
+    private func shellQuote(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    /// Solicita autorización de macOS para operar en /Library/Audio/Plug-Ins.
+    private func runPrivilegedShellCommand(_ command: String) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = [
+            "-e",
+            "on run argv\n do shell script (item 1 of argv) with administrator privileges\nend run",
+            command
+        ]
+        let output = Pipe()
+        process.standardError = output
+        process.standardOutput = output
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            let data = output.fileHandleForReading.readDataToEndOfFile()
+            let detail = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw ClientInstallError.privilegedOperationFailed(detail?.isEmpty == false ? detail! : "Se canceló o falló la autorización de macOS.")
+        }
     }
 
     private func saveForManualInstall(_ source: URL, fileName: String) throws -> URL {
@@ -890,6 +908,7 @@ enum ClientInstallError: LocalizedError {
     case noPluginBundle
     case installedBundleNotFound(String)
     case invalidUninstallPath
+    case privilegedOperationFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -897,7 +916,8 @@ enum ClientInstallError: LocalizedError {
         case .archiveExtractionFailed: return "No se pudo extraer el ZIP."
         case .noPluginBundle: return "El ZIP no contiene un paquete AU (.component) o VST3 (.vst3)."
         case .installedBundleNotFound(let name): return "No encontré los archivos instalados de \(name)."
-        case .invalidUninstallPath: return "Por seguridad, solo se pueden eliminar plugins dentro de las carpetas VST3 y Components de tu usuario."
+        case .invalidUninstallPath: return "Por seguridad, solo se pueden eliminar plugins dentro de /Library/Audio/Plug-Ins/VST3 y /Library/Audio/Plug-Ins/Components."
+        case .privilegedOperationFailed(let message): return "macOS no autorizó la operación en la carpeta global de plugins. \(message)"
         }
     }
 }
