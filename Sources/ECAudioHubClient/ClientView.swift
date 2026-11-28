@@ -105,28 +105,17 @@ struct ClientView: View {
             Text("Se eliminará este bundle AU/VST3 de /Library/Audio/Plug-Ins, aunque no proceda de EC Audio Hub. macOS solicitará autorización de administrador.")
         }
         .task {
-            await library.checkCustomerEntitlement()
             await library.refresh()
-            var entitlementTicks = 0
             while !Task.isCancelled {
-                // Catálogo frecuente; licencia comprobada cada 30 segundos.
-                try? await Task.sleep(nanoseconds: 10_000_000_000)
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
                 if Task.isCancelled { break }
                 await library.refresh()
-                entitlementTicks += 1
-                if entitlementTicks >= 3 {
-                    entitlementTicks = 0
-                    await library.checkCustomerEntitlement()
-                }
             }
         }
         .onChange(of: scenePhase) { phase in
-            // Al volver a abrir/activar la ventana, consulta inmediatamente el catálogo.
+            // Al volver a activar la ventana, actualiza el catálogo.
             if phase == .active {
-                Task {
-                    await library.checkCustomerEntitlement()
-                    await library.refresh()
-                }
+                Task { await library.refresh() }
             }
         }
     }
@@ -298,9 +287,6 @@ struct ClientView: View {
             Spacer()
             if isBusy {
                 ProgressView().controlSize(.small).padding(.horizontal, 12)
-            } else if library.isLicenseEnforcementEnabled && (!library.subscriptionActive || !library.isCustomerSignedIn) {
-                Button("Activar licencia") { showAccountSheet = true }
-                    .buttonStyle(BlueButtonStyle())
             } else if isCurrent {
                 Label("Instalado", systemImage: "checkmark.circle.fill")
                     .font(.system(size: 10, weight: .semibold)).foregroundColor(.green)
