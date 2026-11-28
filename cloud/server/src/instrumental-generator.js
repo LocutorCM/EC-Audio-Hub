@@ -58,6 +58,7 @@ function publicJob(job) {
     progress: job.progress,
     message: job.message || '',
     audioReady: Boolean(job.audioPath && fs.existsSync(job.audioPath)),
+    audioExtension: job.audioExtension || '.mp3',
     stemsReady: Boolean(job.stemsUrl),
     audioDownloadUrl: job.audioPath ? '/api/instrumental/jobs/' + job.id + '/audio' : null,
     stemsDownloadUrl: job.stemsUrl || null,
@@ -137,6 +138,7 @@ async function runJob(job, voice, options) {
     const outputExt = (audio?.content_type || '').includes('wav') ? '.wav' : '.mp3';
     job.audioPath = path.join(idDir, 'EC-AI-Instrumental' + outputExt);
     const downloaded = await downloadAudio(audioUrl, job.audioPath);
+    job.audioExtension = path.extname(job.audioPath);
     setJob(job, { stage: 'mix', stageLabel: 'Instrumental completa lista', progress: 52, message: 'La composición completa está lista. Preparando la separación de pistas.' });
 
     setJob(job, { stage: 'separation', stageLabel: 'Separando pistas individuales', progress: 60, message: 'La IA está identificando y separando las capas instrumentales disponibles.' });
