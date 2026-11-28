@@ -25,15 +25,67 @@ jobs:
 
       - name: Create EC Audio app icon
         run: |
+          cat > dist/create-icon.swift <<'SWIFT'
+          import AppKit
+          import Foundation
+
+          let canvas = 1024
+          let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: canvas, pixelsHigh: canvas, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+          let context = NSGraphicsContext(bitmapImageRep: bitmap)!
+          NSGraphicsContext.saveGraphicsState()
+          NSGraphicsContext.current = context
+          context.imageInterpolation = .high
+
+          let bounds = NSRect(x: 34, y: 34, width: 956, height: 956)
+          let tile = NSBezierPath(roundedRect: bounds, xRadius: 205, yRadius: 205)
+          NSColor(calibratedRed: 0.025, green: 0.035, blue: 0.085, alpha: 1).setFill()
+          tile.fill()
+
+          let border = NSBezierPath(roundedRect: bounds.insetBy(dx: 9, dy: 9), xRadius: 195, yRadius: 195)
+          border.lineWidth = 18
+          NSGradient(colors: [NSColor(calibratedRed: 0.0, green: 0.78, blue: 1.0, alpha: 1), NSColor(calibratedRed: 0.25, green: 0.28, blue: 1.0, alpha: 1), NSColor(calibratedRed: 0.72, green: 0.12, blue: 1.0, alpha: 1)])!.draw(in: border, angle: 0)
+
+          let barHeights: [CGFloat] = [115, 185, 145, 255, 190, 315, 385, 300, 205, 275, 165, 215]
+          for (index, height) in barHeights.enumerated() {
+              let x = CGFloat(150 + index * 62)
+              let bar = NSBezierPath(roundedRect: NSRect(x: x, y: 600, width: 34, height: height), xRadius: 12, yRadius: 12)
+              let color = index < 6
+                  ? NSColor(calibratedRed: 0.0, green: 0.68, blue: 1.0, alpha: 0.95)
+                  : NSColor(calibratedRed: 0.48, green: 0.18, blue: 1.0, alpha: 0.95)
+              color.setFill()
+              bar.fill()
+          }
+
+          let ec = "EC" as NSString
+          let ecAttrs: [NSAttributedString.Key: Any] = [
+              .font: NSFont.systemFont(ofSize: 340, weight: .heavy),
+              .foregroundColor: NSColor.white
+          ]
+          let ecSize = ec.size(withAttributes: ecAttrs)
+          ec.draw(at: NSPoint(x: (CGFloat(canvas) - ecSize.width) / 2, y: 260), withAttributes: ecAttrs)
+
+          let audio = "A U D I O" as NSString
+          let audioAttrs: [NSAttributedString.Key: Any] = [
+              .font: NSFont.systemFont(ofSize: 74, weight: .semibold),
+              .foregroundColor: NSColor(calibratedWhite: 0.88, alpha: 1)
+          ]
+          let audioSize = audio.size(withAttributes: audioAttrs)
+          audio.draw(at: NSPoint(x: (CGFloat(canvas) - audioSize.width) / 2, y: 145), withAttributes: audioAttrs)
+
+          context.flushGraphics()
+          NSGraphicsContext.restoreGraphicsState()
+          let png = bitmap.representation(using: .png, properties: [:])!
+          try png.write(to: URL(fileURLWithPath: "dist/ECAppIcon-1024.png"))
+          SWIFT
+          swift dist/create-icon.swift
           mkdir -p dist/ECAppIcon.iconset
-          base64 -D -i Assets/ec-audio-logo.jpg.b64 -o dist/ec-audio-logo.jpg
           for size in 16 32 128 256 512; do
-            sips -s format png -z $size $size dist/ec-audio-logo.jpg --out dist/ECAppIcon.iconset/icon_${size}x${size}.png >/dev/null
+            sips -s format png -z $size $size dist/ECAppIcon-1024.png --out dist/ECAppIcon.iconset/icon_${size}x${size}.png >/dev/null
             if [ "$size" != "512" ]; then
               double=$((size * 2))
-              sips -s format png -z $double $double dist/ec-audio-logo.jpg --out dist/ECAppIcon.iconset/icon_${size}x${size}@2x.png >/dev/null
+              sips -s format png -z $double $double dist/ECAppIcon-1024.png --out dist/ECAppIcon.iconset/icon_${size}x${size}@2x.png >/dev/null
             else
-              sips -s format png -z 1024 1024 dist/ec-audio-logo.jpg --out dist/ECAppIcon.iconset/icon_512x512@2x.png >/dev/null
+              sips -s format png -z 1024 1024 dist/ECAppIcon-1024.png --out dist/ECAppIcon.iconset/icon_512x512@2x.png >/dev/null
             fi
           done
           iconutil -c icns dist/ECAppIcon.iconset -o dist/ECAppIcon.icns
