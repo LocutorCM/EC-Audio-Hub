@@ -21,6 +21,6 @@
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
-    "@fal-ai/client": "^1.5.0"
+    "@fal-ai/client": "^1.11.0"
   }
 }
