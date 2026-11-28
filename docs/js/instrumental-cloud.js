@@ -79,7 +79,7 @@ $("generateCloud").addEventListener("click", async () => {
     const data = new FormData();
     const genre = $("genre").value === "custom" ? "" : $("genre").value;
     const prompt = [description, genre, $("mood").value, "instrumental music, no vocals, professional studio production"].filter(Boolean).join(", ");
-    data.append("prompt", prompt); data.append("bpm", $("bpm").value || "90"); data.append("duration", $("duration").value || "30");
+    data.append("prompt", prompt); data.append("bpm", $("bpm").value || "90"); data.append("duration", String(Math.min(60, Number($("duration").value || 30))));
     const voice = $("voiceFile").files?.[0]; if (voice) data.append("voice", voice, voice.name);
     const response = await fetch(API_BASE_URL + "/api/instrumental/generate", { method: "POST", headers: await authHeaders(), body: data });
     const payload = await response.json().catch(() => ({}));
