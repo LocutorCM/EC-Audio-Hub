@@ -55,7 +55,7 @@ struct ClientView: View {
     private let panel = Color(hex: 0x171A28)
     private let blue = Color(hex: 0xC7FF5E)
     private let cyan = Color(hex: 0xC7FF5E)
-
+    private var studioArtwork: NSImage? {\n        guard let url = Bundle.module.url(forResource: "ECStudioHero", withExtension: "svg") else { return nil }\n        return NSImage(contentsOf: url)\n    }\n
     var body: some View {
         HStack(spacing: 0) {
             sidebar
@@ -196,8 +196,7 @@ struct ClientView: View {
     }
 
     private var hero: some View {
-        ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 18)
+        ZStack(alignment: .leading) {\n            if let artwork = studioArtwork {\n                Image(nsImage: artwork).resizable().scaledToFill().overlay(Color.black.opacity(0.48))\n            }\n            RoundedRectangle(cornerRadius: 18)
                 .fill(LinearGradient(colors: [Color(hex: 0x27233A), Color(hex: 0x1B1E2E), Color(hex: 0x171A28)], startPoint: .topLeading, endPoint: .bottomTrailing))
             Circle().fill(cyan.opacity(0.12)).frame(width: 230, height: 230).blur(radius: 2).offset(x: 520, y: -55)
             Circle().stroke(Color.white.opacity(0.10), lineWidth: 1).frame(width: 190, height: 190).offset(x: 570, y: 22)
