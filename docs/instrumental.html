@@ -33,15 +33,24 @@ footer{border-top:1px solid #ffffff12;padding:24px 0;color:#777e91;font-size:9px
 <div class="row"><div><label class="field" for="bpm">TEMPO (BPM)</label><input id="bpm" type="number" min="30" max="300" value="90"></div><div><label class="field" for="duration">DURACIÓN (SEGUNDOS)</label><select id="duration"><option value="30">30 segundos · prueba</option><option value="60" selected>1 minuto</option><option value="120">2 minutos</option><option value="180">3 minutos</option></select></div></div>
 <label class="field">VOZ DE REFERENCIA (OPCIONAL)</label><label class="drop" id="dropzone"><strong>＋ Sube tu grabación vocal</strong><span>WAV, MP3, M4A, FLAC · máximo recomendado 30 MB</span><input id="voiceFile" type="file" accept="audio/*"></label><div class="fileline" id="fileLine" hidden><span id="fileName">audio.wav</span><button id="removeFile" type="button">Quitar ×</button></div><audio id="voicePreview" controls hidden></audio>
 <button class="primary" id="generate" disabled>✦ GENERAR EN MI COMPUTADORA</button>
+<div class="tip" id="cloudPanel" style="margin-top:18px;border-color:#5a4b83;background:#a58bff0b">
+<b>02 / GENERAR DESDE LA PÁGINA · SIN DESCARGAS</b>
+<span id="cloudAuthMessage">Comprobando acceso al motor online…</span>
+<button class="primary" id="generateCloud" type="button" disabled style="background:var(--violet);color:#100d1b">✦ GENERAR DESDE EC AUDIO</button>
+<div class="progressbox" id="cloudProgress"><div class="progresshead"><span id="cloudProgressText">Preparando generación online…</span><b id="cloudProgressPct">0%</b></div><div class="progress"><i id="cloudProgressBar"></i></div></div>
+<div class="error" id="cloudError"></div>
+<p class="fine">Esta opción utiliza ACE-Step alojado en Hugging Face ZeroGPU. No instala nada en tu computadora; la disponibilidad y la velocidad dependen de la cuota gratuita y de la cola compartida. Requiere iniciar sesión y autorización del administrador. La primera versión entrega la mezcla completa; la separación de pistas se habilitará por separado.</p>
+</div>
 <div class="progressbox" id="progressBox"><div class="progresshead"><span id="progressText">Preparando el motor local…</span><b id="progressPct">0%</b></div><div class="progress"><i id="progressBar"></i></div></div><div class="error" id="errorBox"></div>
 <div class="note"><strong>Procesamiento local:</strong> el modelo usa la GPU NVIDIA/Apple Silicon compatible cuando está disponible y puede recurrir a CPU. La primera ejecución descarga los modelos al equipo; pueden ocupar varios GB y tardar bastante.</div>
 <p class="fine">La generación de texto a música está disponible con ACE-Step. La voz se utiliza como referencia de audio (modo cover); el resultado puede variar y no equivale a una función dedicada de extracción de voz. El modo de separación de pistas se añadirá tras validar la salida de este motor.</p>
 </section>
 <aside class="panel"><h2>Tu producción</h2><p class="muted">El audio se guarda en el motor local y puedes descargarlo desde aquí.</p><div class="result" id="result"><b id="resultTitle">Esperando tu primera generación</b><span id="resultText">Conecta el motor local y crea tu instrumental.</span></div><audio id="resultAudio" controls hidden></audio><a class="download" id="download" download="EC-Audio-Instrumental.wav">↓ DESCARGAR INSTRUMENTAL</a>
-<div class="tip"><b>01 / Conexión local</b><span>La página se conecta a http://127.0.0.1:8001. Mantén abierta la ventana del motor ACE-Step mientras generas.</span></div><div class="tip"><b>02 / Privacidad</b><span>Los archivos de voz se envían únicamente al servidor local de tu computadora. No se suben a Hugging Face ni a Render.</span></div><div class="tip"><b>03 / Rendimiento</b><span>La velocidad y duración dependen de la memoria RAM, la GPU y el modelo descargado.</span></div></aside>
+<div class="tip"><b>01 / Conexión local</b><span>La página se conecta a http://127.0.0.1:8001. Mantén abierta la ventana del motor ACE-Step mientras generas.</span></div><div class="tip"><b>02 / Generación online</b><span>La solicitud se envía al motor ACE-Step ZeroGPU mediante EC Audio Cloud. Solo las cuentas autorizadas pueden generar y cada cuenta tiene un límite de 3 solicitudes por hora.</span></div><div class="tip"><b>02 / Privacidad</b><span>Los archivos de voz se envían únicamente al servidor local de tu computadora. No se suben a Hugging Face ni a Render.</span></div><div class="tip"><b>03 / Rendimiento</b><span>La velocidad y duración dependen de la memoria RAM, la GPU y el modelo descargado.</span></div></aside>
 </div><div class="tip"><b>INSTALACIÓN DEL MODELO LOCAL</b><span>Para descargar ACE-Step 1.5 y arrancar el motor en tu computadora, sigue la <a href="./AI-INSTRUMENTAL-SETUP.md" target="_blank" rel="noopener" style="color:var(--lime);text-decoration:underline">guía de instalación EC Audio</a>. El modelo requiere varios GB y hardware compatible.</span></div>
 </main>
-<footer class="wrap"><span>EC AUDIO · SHAPE YOUR SOUND</span><span>LOCAL AI MUSIC ENGINE</span></footer>
+<footer class="wrap"><span>EC AUDIO · SHAPE YOUR SOUND</span><span>LOCAL + ONLINE AI MUSIC ENGINE</span></footer>
+<script type="module" src="./js/instrumental-cloud.js"></script>
 <script type="module">
 const API='http://127.0.0.1:8001';
 const $=id=>document.getElementById(id);
