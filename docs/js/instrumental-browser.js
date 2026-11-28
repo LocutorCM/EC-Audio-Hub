@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-let busy = false, referenceBuffer = null, outputUrl = null;
+let busy = false, referenceBuffer = null, outputUrl = null, referenceEnergy = "media";
 
 function setMessage(text) { $("cloudAuthMessage").textContent = text; }
 function setProgress(value, text) {
@@ -137,9 +137,9 @@ async function compose() {
     for(let s=0;s<8;s++){
       const t=start+s*step;if(t>=seconds)continue;
       const kickOn=genre==="reggaeton"?(s===0||s===3||s===4||s===7):(s===0||((genre==="trap"||genre==="hip hop")&&s===5));
-      if(kickOn)kick(ctx,drum,t,chorus?.85:.68);
-      if(s===2||s===6)noiseHit(ctx,drum,t,.17,genre==="lofi"?.19:.27,"snare",random);
-      if(genre!=="cinematic orchestral" && (s%2===1||genre==="trap"&&s===3))noiseHit(ctx,drum,t,.045,genre==="lofi"?.07:.12,"hat",random);
+      if(kickOn)kick(ctx,drum,t,chorus ? .85*energyScale : .68*energyScale);
+      if(s===2||s===6)noiseHit(ctx,drum,t,.17,(genre==="lofi"?.19:.27)*energyScale,"snare",random);
+      if(genre!=="cinematic orchestral" && (s%2===1||genre==="trap"&&s===3))noiseHit(ctx,drum,t,.045,(genre==="lofi"?.07:.12)*energyScale,"hat",random);
       if(s%2===0){
         const note=root+(s===4?12:0);
         tone(ctx,bass,midi(note),t,step*.82,"sawtooth",.16,genre==="lofi"?180:260);
