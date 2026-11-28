@@ -39,6 +39,8 @@ jobs:
           </dict></plist>
           PLIST
           lipo -create .build/x86_64-apple-macosx/release/EC-Audio-Hub .build/arm64-apple-macosx/release/EC-Audio-Hub -output "dist/EC Audio Hub Admin.app/Contents/MacOS/EC-Audio-Hub"
+          mkdir -p "dist/EC Audio Hub Admin.app/Contents/Resources"
+          cp -R .build/x86_64-apple-macosx/release/ECAudioHub_ECAudioHub.bundle "dist/EC Audio Hub Admin.app/Contents/Resources/"
           codesign --force --deep --sign - "dist/EC Audio Hub Admin.app"
           ditto -c -k --sequesterRsrc --keepParent "dist/EC Audio Hub Admin.app" EC-Audio-Hub-Admin-macOS-Universal.zip
 
@@ -59,6 +61,8 @@ jobs:
           </dict></plist>
           PLIST
           lipo -create .build/x86_64-apple-macosx/release/EC-Audio-Hub-Client .build/arm64-apple-macosx/release/EC-Audio-Hub-Client -output "dist/EC Audio Hub Client.app/Contents/MacOS/EC-Audio-Hub-Client"
+          mkdir -p "dist/EC Audio Hub Client.app/Contents/Resources"
+          cp -R .build/x86_64-apple-macosx/release/ECAudioHub_ECAudioHubClient.bundle "dist/EC Audio Hub Client.app/Contents/Resources/"
           codesign --force --deep --sign - "dist/EC Audio Hub Client.app"
           ditto -c -k --sequesterRsrc --keepParent "dist/EC Audio Hub Client.app" EC-Audio-Hub-Client-macOS-Universal.zip
 
