@@ -341,7 +341,7 @@ final class ClientLibrary: ObservableObject {
         guard fileManager.fileExists(atPath: url.path) else {
             throw ClientInstallError.installedBundleNotFound(url.lastPathComponent)
         }
-        try fileManager.removeItem(at: url)
+        try runWithAdministratorPrivileges("/bin/rm -rf -- \\(shellQuote(url.path))")
         for (name, paths) in Array(installedPaths) {
             let remaining = paths.filter { $0 != url.path }
             if remaining.isEmpty {
