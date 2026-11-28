@@ -148,7 +148,7 @@ async function pollJob(jobId) {
       $("resultPlayer").src = outputUrl;
       $("resultPlayer").hidden = false;
       $("downloadMix").href = outputUrl;
-      $("downloadMix").download = (selectedFile?.name.replace(/\.[^.]+$/, "") || "EC-Audio") + "-EC-AI-Instrumental.wav";
+      $("downloadMix").download = (selectedFile?.name.replace(/\.[^.]+$/, "") || "EC-Audio") + "-EC-AI-Instrumental" + (job.audioExtension || ".mp3");
       $("downloadMix").classList.add("show");
       if (job.stemsDownloadUrl) {
         $("downloadStems").href = job.stemsDownloadUrl;
