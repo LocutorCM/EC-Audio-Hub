@@ -50,8 +50,8 @@ $("masterButton").addEventListener("click",async()=>{
     if(masteredURL)URL.revokeObjectURL(masteredURL);masteredURL=URL.createObjectURL(result.blob);
     $("masteredPlayer").src=masteredURL;$("downloadLink").href=masteredURL;
     const ext=$("format").value;$("downloadLink").download=(selectedFile.name.replace(/\.[^.]+$/,"")||"EC-Audio")+"-EC-AI-Mastered."+ext;
-    const headers=new Headers(result.headers);const profile=decodeURIComponent(headers.get("x-ec-mastering-profile")||"Perfil adaptativo");const target=headers.get("x-ec-mastering-target-lufs")||"—";const peak=headers.get("x-ec-mastering-input-peak");
-    $("profileValue").textContent=profile;$("lufsValue").textContent=target+" LUFS";$("peakValue").textContent=peak&&peak!=="unknown"?peak+" dBFS":"No disponible";
+    const headers=new Headers(result.headers);const profile=decodeURIComponent(headers.get("x-ec-mastering-profile")||"Perfil adaptativo");const target=headers.get("x-ec-mastering-target-lufs")||"—";const peak=headers.get("x-ec-mastering-input-peak");const outputPeak=headers.get("x-ec-mastering-output-peak");
+    $("profileValue").textContent=profile;$("lufsValue").textContent=target+" LUFS";$("peakValue").textContent=peak&&peak!=="unknown"?peak+" dBFS":"No disponible";$("outputPeakValue").textContent=outputPeak&&outputPeak!=="unknown"?outputPeak+" dBFS":"No disponible";
     $("result").classList.add("show");$("emptyResult").hidden=true;$("resultState").textContent="MASTER COMPLETADA";$("resultState").style.color="var(--lime)";
   }catch(error){showError(error.message||"Ocurrió un error durante la masterización.");$("resultState").textContent="ERROR";$("resultState").style.color="#ffabb7";}
   finally{$("masterButton").disabled=!selectedFile||!signedInUser;$("status").classList.remove("show");}
