@@ -5,18 +5,19 @@ import UniformTypeIdentifiers
 struct HubView: View {
     @State private var releaseToDelete: AdminRelease?
     @EnvironmentObject private var uploader: UploadManager
-    private let bg = Color(red: 0.055, green: 0.067, blue: 0.09)
-    private let panel = Color(red: 0.105, green: 0.125, blue: 0.16)
-    private let orange = Color(red: 0.96, green: 0.39, blue: 0.18)
+    private let bg = Color(red: 0.035, green: 0.039, blue: 0.070)
+    private let panel = Color(red: 0.075, green: 0.085, blue: 0.135)
+    private let lime = Color(red: 0.78, green: 1.0, blue: 0.37)
+    private let violet = Color(red: 0.65, green: 0.55, blue: 1.0)
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Image(systemName: "waveform").font(.system(size: 24, weight: .bold)).foregroundColor(.white)
-                    .frame(width: 46, height: 46).background(orange).cornerRadius(12)
+                Image(systemName: "waveform").font(.system(size: 24, weight: .bold)).foregroundColor(bg)
+                    .frame(width: 46, height: 46).background(LinearGradient(colors: [lime, violet], startPoint: .topLeading, endPoint: .bottomTrailing)).cornerRadius(14)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("EC AUDIO").font(.system(size: 15, weight: .black, design: .rounded))
-                    Text("HUB / GITHUB RELEASE PUBLISHER").font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundColor(orange)
+                    Text("PRIVATE PLUGIN DISTRIBUTION").font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundColor(lime)
                 }
                 Spacer()
                 if uploader.isAuthenticated {
@@ -51,7 +52,7 @@ struct HubView: View {
     private var connection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Spacer()
-            Text("PANEL PRIVADO").font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(orange)
+            Text("PANEL PRIVADO").font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(lime)
             Text("Conectar con GitHub").font(.system(size: 28, weight: .bold, design: .rounded))
             Text("El programa publicará cada plugin como un GitHub Release. El token se guarda en el Llavero de macOS y nunca se incluye en EC Audio Hub Client.")
                 .font(.system(size: 13)).foregroundColor(.secondary)
@@ -66,7 +67,7 @@ struct HubView: View {
                     .font(.system(size: 10)).foregroundColor(.secondary)
                 Button { Task { await uploader.connectGitHub() } } label: {
                     HStack { Spacer(); if uploader.isConnecting { ProgressView().scaleEffect(0.75) }; Text(uploader.isConnecting ? "Verificando…" : "CONECTAR GITHUB"); Image(systemName: "arrow.right"); Spacer() }
-                        .font(.system(size: 12, weight: .bold)).padding(14).background(orange).foregroundColor(.white).cornerRadius(9)
+                        .font(.system(size: 12, weight: .bold)).padding(14).background(LinearGradient(colors: [lime, violet], startPoint: .leading, endPoint: .trailing)).foregroundColor(bg).cornerRadius(11)
                 }.buttonStyle(.plain).disabled(uploader.isConnecting)
             }.padding(20).background(panel).cornerRadius(14)
             Spacer()
@@ -76,9 +77,9 @@ struct HubView: View {
     private var publisher: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 5) {
-                Text("PUBLICAR NUEVA VERSIÓN").font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(orange)
+                Text("PUBLICAR NUEVA VERSIÓN").font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(lime)
                 Text("Distribución de plugins").font(.system(size: 27, weight: .bold, design: .rounded))
-                Text("Los archivos se almacenan como assets de GitHub Releases. Los clientes podrán consultar versiones y descargar el instalador sin abrir GitHub.")
+                Text("Solo aparecerán aquí los plugins publicados desde este Admin Hub. Los cambios y archivos subidos directamente al repositorio no se mostrarán en esta lista.")
                     .font(.system(size: 12)).foregroundColor(.secondary)
             }
             HStack(spacing: 12) {
@@ -93,7 +94,7 @@ struct HubView: View {
             }
             Button { chooseFile() } label: {
                 VStack(spacing: 10) {
-                    Image(systemName: "icloud.and.arrow.up").font(.system(size: 34)).foregroundColor(orange)
+                    Image(systemName: "icloud.and.arrow.up").font(.system(size: 34)).foregroundColor(lime)
                     Text(uploader.selectedFile?.lastPathComponent ?? "Seleccionar plugin o instalador").font(.system(size: 15, weight: .bold))
                     Text("VST3 • AU • AAX • PKG • DMG • ZIP • APP").font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary)
                     Text("Puedes seleccionar una carpeta VST3/AU; se comprimirá en ZIP.").font(.system(size: 10)).foregroundColor(.secondary)
@@ -108,7 +109,7 @@ struct HubView: View {
             HStack(spacing: 10) {
                 Button { chooseArtwork() } label: {
                     Label(uploader.selectedArtwork?.lastPathComponent ?? "Añadir imagen ilustrativa", systemImage: "photo")
-                        .font(.system(size: 11, weight: .semibold)).foregroundColor(Color(red: 0.42, green: 0.78, blue: 0.95))
+                        .font(.system(size: 11, weight: .semibold)).foregroundColor(violet)
                 }.buttonStyle(.plain)
                 if uploader.selectedArtwork != nil {
                     Button("Quitar imagen") { uploader.clearArtwork() }.buttonStyle(.plain).foregroundColor(.secondary)
@@ -124,10 +125,10 @@ struct HubView: View {
             Button { Task { await uploader.uploadSelectedFile() } } label: {
                 HStack { Spacer(); if uploader.isUploading { ProgressView().scaleEffect(0.75) } else { Image(systemName: "shippingbox.fill") }; Text(uploader.isUploading ? "PUBLICANDO…" : "PUBLICAR EN GITHUB RELEASES"); Spacer() }
                     .font(.system(size: 12, weight: .bold)).padding(14)
-                    .background(uploader.selectedFile == nil || uploader.isUploading ? Color.gray.opacity(0.25) : orange).foregroundColor(.white).cornerRadius(9)
+                    .background(uploader.selectedFile == nil || uploader.isUploading ? Color.gray.opacity(0.25) : lime).foregroundColor(bg).cornerRadius(11)
             }.buttonStyle(.plain).disabled(uploader.selectedFile == nil || uploader.isUploading)
             HStack(spacing: 8) {
-                Circle().fill(uploader.isUploading ? orange : Color.green).frame(width: 7, height: 7)
+                Circle().fill(uploader.isUploading ? lime : Color.green).frame(width: 7, height: 7)
                 Text(uploader.status).font(.system(size: 11)).foregroundColor(.secondary)
             }
             if !uploader.lastUploaded.isEmpty {
@@ -135,7 +136,7 @@ struct HubView: View {
             }
             Divider().overlay(Color.white.opacity(0.08))
             HStack {
-                Text("PUBLICACIONES EN GITHUB").font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(orange)
+                Text("PUBLICACIONES DEL ADMIN HUB").font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(lime)
                 Spacer()
                 Button { Task { await uploader.refreshReleases() } } label: { Image(systemName: "arrow.clockwise") }.buttonStyle(.plain)
             }
