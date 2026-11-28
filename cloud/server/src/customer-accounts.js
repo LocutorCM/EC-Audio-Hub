@@ -424,6 +424,8 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
       .run(new Date().toISOString(), req.params.deviceId, req.customer.id);
     return res.json({ released: true });
   });
+
+  return { customerAuth, subscriptionFor };
 }
 
 module.exports = { installCustomerAccountApi };
