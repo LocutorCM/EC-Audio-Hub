@@ -1,11 +1,5 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
-import { firebaseConfig } from "./firebase-config.js";
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
 const $ = id => document.getElementById(id);
-let file=null,inputUrl=null,outputUrl=null,signedIn=false,busy=false;
+let file=null,inputUrl=null,outputUrl=null,signedIn=true,busy=false;
 
 function bytes(n){return n<1048576?(n/1024).toFixed(0)+" KB":(n/1048576).toFixed(1)+" MB";}
 function error(message){$("errorBox").textContent=message;$("errorBox").classList.add("show");}
@@ -69,7 +63,7 @@ function addNoise(ctx,t,duration,level,highpass=5000){
  const size=Math.ceil(ctx.sampleRate*duration),b=ctx.createBuffer(1,size,ctx.sampleRate),d=b.getChannelData(0);for(let i=0;i<size;i++)d[i]=Math.random()*2-1;
  const src=ctx.createBufferSource(),f=ctx.createBiquadFilter(),g=ctx.createGain();src.buffer=b;f.type="highpass";f.frequency.value=highpass;g.gain.setValueAtTime(level,t);g.gain.exponentialRampToValueAtTime(.0001,t+duration);src.connect(f);f.connect(g);g.connect(ctx.destination);src.start(t);src.stop(t+duration);
 }
-function addChord(ctx,t,dur,root,quality,style){
+function addChord(ctx,t,dur,root,quality,style,pianoLike=false){
  const intervals=quality==="minor"?[0,3,7]:[0,4,7];
  const pad=["worship","ballad","cinematic","acoustic"].includes(style);
  intervals.forEach((iv,i)=>{const note=root+iv+ (pad?0:12);addTone(ctx,t,dur,midiHz(note),pianoLike?"triangle":(pad?"sawtooth":"triangle"),pad?.035:.022,i===0?-.22:.22,i===1?4:0);});
@@ -95,7 +89,7 @@ async function buildArrangement(input,style,tempoMode,mood,notes,onProgress){
  for(let b=0;b<bars;b++){
   const t=b*bar;if(t>=duration)break;const degree=progression[b%progression.length],root=baseMidi+scale[degree%7]+(degree>=5?12:0);
   const quality=(degree===1||degree===2||degree===5)&&scale===scales.minor?"minor":"major";
-  addChord(ctx,t,Math.min(bar+.1,duration-t),root,quality,style);
+  addChord(ctx,t,Math.min(bar+.1,duration-t),root,quality,style,pianoLike);
   for(let q=0;q<4;q++){
    const bt=t+q*beat;if(bt>=duration)continue;
    addTone(ctx,bt,Math.min(beat*.85,duration-bt),midiHz(root-12),"triangle",.09,0);
@@ -129,7 +123,7 @@ async function buildArrangement(input,style,tempoMode,mood,notes,onProgress){
 }
 $("generateButton").addEventListener("click",async()=>{
  if(!file||!signedIn||busy)return;clearError();
- const user=auth.currentUser;if(!user){window.location.href="./account.html?return=instrumental";return;}
+
  busy=true;updateButton();$("resultTitle").textContent="Creando tu acompañamiento…";$("resultText").textContent="El audio se está procesando dentro de tu navegador."; $("result").classList.add("ready");
  let context;
  try{
@@ -147,4 +141,4 @@ $("generateButton").addEventListener("click",async()=>{
  }catch(e){$("resultTitle").textContent="No se pudo crear el acompañamiento";$("resultText").textContent="Revisa el mensaje de error e inténtalo nuevamente.";error(e.message||"Ocurrió un error inesperado.");}
  finally{if(context)try{await context.close();}catch{}busy=false;updateButton();setTimeout(()=>$("status").classList.remove("show"),1800);}
 });
-onAuthStateChanged(auth,user=>{signedIn=Boolean(user);$("generateButton").textContent=user?"✦ CREAR MI INSTRUMENTAL":"INICIA SESIÓN PARA GENERAR";updateButton();});
+$("generateButton").textContent="✦ CREAR MI INSTRUMENTAL";updateButton();
