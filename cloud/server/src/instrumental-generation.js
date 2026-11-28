@@ -64,7 +64,7 @@ function installInstrumentalApi(app, { db, customerAuth, adminEmail = '' }) {
     const since = new Date(Date.now() - 3600000).toISOString();
     const recent = db.prepare('SELECT COUNT(*) AS count FROM instrumental_jobs WHERE customer_id=? AND created_at>=?').get(req.customer.id, since).count;
     if (recent >= HOURLY_LIMIT) return res.status(429).json({ error: 'Alcanzaste el límite gratuito de 3 generaciones por hora. Inténtalo más tarde.' });
-    const payload = { caption, lyrics: '[Instrumental]', instrumental: true, thinking: false, audio_duration: duration, bpm, audio_format: 'mp3', inference_steps: 8, batch_size: 1, model: 'acestep-v15-turbo', task_type: 'text2music' };
+    const payload = { caption, lyrics: '[Instrumental]', instrumental: true, thinking: false, audio_duration: duration, bpm, audio_format: 'mp3', inference_steps: 8, batch_size: 1, task_type: 'text2music' };
     try {
       let r;
       if (req.file) {
