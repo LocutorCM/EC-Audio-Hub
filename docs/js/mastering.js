@@ -89,7 +89,7 @@ $("masterButton").addEventListener("click",async()=>{
     if(masteredURL)URL.revokeObjectURL(masteredURL);masteredURL=URL.createObjectURL(result.blob);
     $("masteredPlayer").src=masteredURL;$("downloadLink").href=masteredURL;
     $("downloadLink").download=(selectedFile.name.replace(/\.[^.]+$/,"")||"EC-Audio")+"-EC-AI-Mastered-24bit.wav";
-    $("profileValue").textContent=result.profile;$("lufsValue").textContent=result.target+" LUFS aprox.";$("peakValue").textContent=result.inputPeak+" dBFS";$("outputPeakValue").textContent=result.outputPeak+" dBFS";
+    $("profileValue").textContent=result.profile;$("lufsValue").textContent=result.target+" dBFS RMS aprox.";$("peakValue").textContent=result.inputPeak+" dBFS";$("outputPeakValue").textContent=result.outputPeak+" dBFS";
     $("result").classList.add("show");$("emptyResult").hidden=true;$("resultState").textContent="MASTER COMPLETADA";$("resultState").style.color="var(--lime)";setProgress(100,"Master terminada");
   }catch(error){showError(error.message||"No se pudo masterizar esta canción.");$("resultState").textContent="ERROR";$("resultState").style.color="#ffabb7";}
   finally{if(context)try{await context.close();}catch{}busy=false;$("masterButton").disabled=!selectedFile;$("status").classList.remove("show");}
