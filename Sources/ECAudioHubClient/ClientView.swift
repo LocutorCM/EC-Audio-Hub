@@ -50,6 +50,7 @@ struct ClientView: View {
     @State private var selectedSection = "Biblioteca"
     @State private var pluginToUninstall: String?
     @State private var showAccountSheet = false
+    @StateObject private var updater = ClientUpdater()
 
     private let navy = Color(hex: 0x090A12)
     private let panel = Color(hex: 0x171A28)
@@ -61,6 +62,25 @@ struct ClientView: View {
             sidebar
             VStack(spacing: 0) {
                 topBar
+                if let update = updater.availableUpdate {
+                    HStack(spacing: 12) {
+                        Image(systemName: "arrow.down.circle.fill").foregroundColor(Color(hex: 0xC7FF5E))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Nueva versión disponible · v\\(update.version)").font(.system(size: 11, weight: .bold)).foregroundColor(.white)
+                            Text("Actualiza EC Audio Hub Client para obtener las últimas mejoras.").font(.system(size: 9)).foregroundColor(Color(hex: 0xBFC4D5))
+                        }
+                        Spacer()
+                        Button(updater.isInstalling ? "Instalando…" : "Actualizar ahora") {
+                            Task { await updater.installUpdate() }
+                        }
+                        .buttonStyle(BlueButtonStyle())
+                        .disabled(updater.isInstalling)
+                        Button("Más tarde") { updater.dismissUpdate() }
+                            .font(.system(size: 10, weight: .semibold)).foregroundColor(.secondary).buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 22).padding(.vertical, 12)
+                    .background(Color(hex: 0x20283A))
+                }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 22) {
                         hero
@@ -80,6 +100,9 @@ struct ClientView: View {
         }
         .background(navy)
         .preferredColorScheme(.dark)
+        .alert("No se pudo actualizar EC Audio Hub Client", isPresented: Binding(get: { updater.errorMessage != nil }, set: { if !$0 { updater.errorMessage = nil } })) {
+            Button("Aceptar", role: .cancel) { updater.errorMessage = nil }
+        } message: { Text(updater.errorMessage ?? "") }
         .sheet(isPresented: $showAccountSheet) { AccountSheet().environmentObject(library) }
         .alert("EC Audio Hub Client", isPresented: Binding(
             get: { library.errorMessage != nil },
@@ -105,6 +128,7 @@ struct ClientView: View {
             Text("Se eliminará únicamente el plugin instalado y registrado por EC Audio Hub. macOS solicitará autorización de administrador.")
         }
         .task {
+            await updater.checkForUpdates()
             await library.refresh()
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 30_000_000_000)
@@ -115,7 +139,7 @@ struct ClientView: View {
         .onChange(of: scenePhase) { phase in
             // Al volver a activar la ventana, actualiza el catálogo.
             if phase == .active {
-                Task { await library.refresh() }
+                Task { await library.refresh(); await updater.checkForUpdates() }
             }
         }
     }
