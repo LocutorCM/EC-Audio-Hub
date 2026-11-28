@@ -311,8 +311,10 @@ final class ClientLibrary: ObservableObject {
                 let ext = url.pathExtension.lowercased()
                 guard ext == "vst3" || ext == "component" else { continue }
                 let path = url.standardizedFileURL.path
-                let owner = installedPaths.first(where: { $0.value.contains(path) })?.key
-                let version = owner.flatMap { installedVersions[$0] }
+                // Mostrar únicamente bundles que este Client Hub instaló desde el catálogo EC Audio.
+                // Los AU/VST3 de terceros presentes en las carpetas globales del sistema se ignoran.
+                guard let owner = installedPaths.first(where: { $0.value.contains(path) })?.key else { continue }
+                let version = installedVersions[owner]
                 result.append(InstalledPlugin(
                     id: path,
                     name: url.deletingPathExtension().lastPathComponent,
@@ -360,18 +362,7 @@ final class ClientLibrary: ObservableObject {
         let fileManager = FileManager.default
         let root = pluginInstallRoot()
         var paths = installedPaths[name] ?? []
-        // Older Client versions did not store exact bundle paths; try matching bundle names.
-        if paths.isEmpty {
-            for folderName in ["VST3", "Components"] {
-                let folder = root.appendingPathComponent(folderName, isDirectory: true)
-                let contents = (try? fileManager.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
-                paths += contents.filter { url in
-                    let candidate = url.deletingPathExtension().lastPathComponent
-                    return candidate.localizedCaseInsensitiveContains(name) || name.localizedCaseInsensitiveContains(candidate)
-                }.map(\.path)
-            }
-        }
-        guard !paths.isEmpty else { throw ClientInstallError.installedBundleNotFound(name) }
+        // Solo se pueden desinstalar bundles registrados como instalados por EC Audio Hub.\n        guard !paths.isEmpty else { throw ClientInstallError.installedBundleNotFound(name) }
         for rawPath in paths {
             let url = URL(fileURLWithPath: rawPath).standardizedFileURL
             let parent = url.deletingLastPathComponent()
