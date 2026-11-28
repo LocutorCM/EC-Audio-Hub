@@ -26,46 +26,19 @@ footer{border-top:1px solid #ffffff12;padding:24px 0;color:#777e91;font-size:9px
 <header class="wrap"><a class="brand" href="./"><span class="logo">EC</span><span>EC AUDIO</span></a><div style="display:flex;gap:18px"><a class="back" href="./account.html">Mi cuenta ↗</a><a class="back" href="./">← Volver</a></div></header>
 <main class="wrap">
 <div class="hero"><div class="eyebrow">EC AUDIO / AI MUSIC STUDIO</div><h1>EC AI <span>INSTRUMENTAL</span></h1><p>Crea una instrumental con inteligencia artificial a partir de tu voz. Descarga la mezcla completa y un paquete de pistas separadas para continuar trabajando en tu DAW.</p></div>
-<div class="layout">
-<section class="panel">
-<h2>01 / Tu voz y dirección musical</h2><p class="muted">Sube una voz a capela, elige el género y describe el ambiente que buscas. El motor de IA construirá un acompañamiento musical completo.</p>
-<label class="drop" id="dropzone" for="voiceFile"><div class="upload-icon">♫</div><strong>Selecciona o arrastra tu voz</strong><span>WAV · MP3 · M4A · AAC · OGG · Máx. 50 MB</span><input id="voiceFile" type="file" accept=".wav,.mp3,.m4a,.aac,.ogg,audio/*"></label>
-<div class="file" id="fileLine" hidden><div style="font-size:21px;color:var(--lime)">♫</div><div class="filemeta"><b id="fileName"></b><small id="fileSize"></small></div><button class="remove" id="removeFile" type="button">×</button></div>
-<audio id="voicePlayer" controls hidden></audio>
-<div class="row"><div><label class="field" for="style">Estilo musical</label><select id="style"><option value="worship">Adoración / Worship</option><option value="ballad">Balada</option><option value="acoustic">Acústico</option><option value="pop">Pop</option><option value="urban">Urbano / Reggaetón</option><option value="reggaeton">Reggaetón clásico</option><option value="rap">Rap / Hip-hop</option><option value="boom_bap">Boom bap</option><option value="trap">Trap</option><option value="drill">Drill</option><option value="afrobeat">Afrobeat</option><option value="house">House / Dance</option><option value="rock">Rock</option><option value="rnb">R&B / Soul</option><option value="cinematic">Cinemático</option></select></div><div><label class="field" for="tempo">BPM objetivo (60–200)</label><input id="tempo" type="number" min="60" max="200" step="1" value="96" inputmode="numeric"></div></div>
-<label class="field" for="mood">Ambiente / emoción</label><input id="mood" type="text" maxlength="120" placeholder="Ej. emotiva, esperanzadora, íntima y épica">
-<label class="field" for="notes">Indicaciones para los arreglos (opcional)</label><textarea id="notes" maxlength="500" placeholder="Ej. piano al inicio, batería potente en el coro, guitarras ambientales y bajo profundo..."></textarea>
-<div class="notice">Tu voz se enviará al espacio de IA de EC Audio en Hugging Face para generar la música y separar las pistas. Al continuar, autorizas ese procesamiento por un proveedor externo. No subas grabaciones de otras personas sin su permiso.</div>
-<div class="cost">Costos del proveedor: ACE-Step se cobra por duración de audio generado (tarifa publicada: US$0.0002 por segundo). La separación avanzada de pistas puede añadir US$0.20 por canción con el modelo seleccionado. Los precios pueden cambiar y los cobra el proveedor de IA.</div>
-<label class="consent"><input id="consent" type="checkbox"><span>Autorizo enviar mi grabación de voz a los servicios de IA externos para generar la instrumental y separar sus pistas.</span></label>
-<button class="primary" id="generateButton" disabled>✦ CREAR CON INTELIGENCIA ARTIFICIAL</button>
-<p class="muted" id="authMessage" style="margin:12px 0 0;text-align:center">Comprobando tu sesión de EC Audio…</p>
-<div class="status" id="status" aria-live="polite">
- <div class="statushead"><span id="statusText">Preparando generación…</span><b id="statusPercent">0%</b></div><div class="progress"><i id="progressBar"></i></div>
- <div class="stage-list">
-  <div class="stage" id="stageCompose"><i class="dot"></i><span><b>Composición IA</b><br>Creando la instrumental completa a partir de tu voz</span></div>
-  <div class="stage" id="stageStems"><i class="dot"></i><span><b>Separación de pistas</b><br>Analizando batería, bajo, piano/teclados y otras capas que el modelo pueda aislar</span></div>
-  <div class="stage" id="stageDone"><i class="dot"></i><span><b>Archivos listos</b><br>Preparando mezcla completa y paquete de stems</span></div>
- </div>
-</div>
-<div class="error" id="errorBox" role="alert"></div>
+<section class="panel" style="padding:0;overflow:hidden">
+  <div style="padding:22px 24px 15px">
+    <h2>Generador de música IA · motor público</h2>
+    <p class="muted" style="margin-bottom:10px">Usa ACE-Step 1.5 directamente, sin configurar cuentas, tokens ni servidores propios. En el generador puedes elegir Vocal2BGM para crear acompañamiento a partir de tu voz y usar las funciones de separación de pistas que estén habilitadas.</p>
+    <div class="notice" style="margin-top:8px">Este motor es un servicio público de Hugging Face. La disponibilidad, la cola y los límites gratuitos dependen del proveedor. Tu audio se envía directamente a ese servicio, no al servidor privado de EC Audio. No subas grabaciones de otras personas sin su permiso.</div>
+    <p class="cost">ACE-Step anuncia generación de música, conversión de voz a acompañamiento y separación de pistas. El espacio público puede cambiar su interfaz o dejar de aceptar solicitudes; EC Audio no controla sus cuotas.</p>
+    <p style="display:flex;gap:12px;flex-wrap:wrap;margin:16px 0 2px">
+      <a class="primary" style="display:inline-block;width:auto;margin:0;text-align:center" href="https://huggingface.co/spaces/ACE-Step/Ace-Step-v1.5" target="_blank" rel="noopener">ABRIR GENERADOR OFICIAL ↗</a>
+      <a class="back" style="align-self:center" href="https://huggingface.co/spaces/ACE-Step/Ace-Step-v1.5" target="_blank" rel="noopener">Abrir en otra pestaña</a>
+    </p>
+  </div>
+  <iframe title="ACE-Step 1.5 public music generator" src="https://ace-step-ace-step-v1-5.hf.space" loading="lazy" allow="clipboard-read; clipboard-write; microphone" style="display:block;width:100%;height:1050px;border:0;background:#11131e"></iframe>
 </section>
-<section class="panel">
-<h2>02 / Tu producción</h2><p class="muted">Escucha y descarga la instrumental. Las pistas separadas se entregan en un archivo ZIP.</p>
-<div class="result" id="result"><div style="font-size:30px;margin-bottom:12px">◉</div><b id="resultTitle">Tu instrumental aparecerá aquí</b><span id="resultText">La mezcla y los stems estarán disponibles al terminar la generación.</span></div>
-<audio id="resultPlayer" controls hidden></audio>
-<a class="download" id="downloadMix" href="#" download="EC-AI-Instrumental.wav">↓ DESCARGAR INSTRUMENTAL COMPLETA</a>
-<a class="download secondary" id="downloadStems" href="#" target="_blank" rel="noopener">↓ DESCARGAR PISTAS SEPARADAS (ZIP)</a>
-<div class="track-grid">
- <div class="track">Piano / teclados<small>Disponible si el modelo lo separa</small></div>
- <div class="track">Batería / percusión<small>Disponible si el modelo lo separa</small></div>
- <div class="track">Bajo<small>Disponible si el modelo lo separa</small></div>
- <div class="track">Guitarras / otros<small>Según las capas detectadas</small></div>
-</div>
-<div class="tip"><b>PROGRESO REAL POR ETAPAS</b><span>El porcentaje indica etapas completadas del proceso, no pasos internos de la red neuronal. El proveedor no informa un porcentaje individual para piano, batería o bajo: separa las capas en un solo trabajo y entrega las pistas detectadas dentro del ZIP.</span></div>
-<div class="tip"><b>IMPORTANTE</b><span>La IA usa tu voz como referencia musical, pero puede no seguir exactamente cada nota, compás o cambio de tempo. El resultado final depende de la grabación y del modelo.</span></div>
-</section>
-</div>
 </main>
 <footer class="wrap"><span>EC AUDIO · SHAPE YOUR SOUND</span><span>AI-powered music creation</span></footer>
 <script type="module" src="./js/instrumental.js"></script>
