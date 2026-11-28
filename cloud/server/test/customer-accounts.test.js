@@ -9,7 +9,7 @@ const jwt = require('jsonwebtoken');
 const Database = require('better-sqlite3');
 const { installCustomerAccountApi } = require('../src/customer-accounts');
 
-test('customer registration, login, one-time trial activation and expiry', async (t) => {
+test('customer registration, login and disabled free trial', async (t) => {
   const db = new Database(':memory:');
   const app = express();
   app.use(express.json());
@@ -65,25 +65,10 @@ test('customer registration, login, one-time trial activation and expiry', async
     method: 'POST',
     headers
   });
-  assert.equal(activate.status, 200);
-  const trial = await activate.json();
-  assert.equal(trial.subscription.active, true);
-  assert.ok(trial.subscription.remainingSeconds > 0 && trial.subscription.remainingSeconds <= 60);
-  assert.equal(trial.subscription.plan, 'trial');
-
-  db.prepare("UPDATE customer_subscriptions SET expires_at=? WHERE customer_id=?")
-    .run(new Date(Date.now() - 1000).toISOString(), created.user.id);
-  const expiredResponse = await fetch(base + '/api/customer/subscription', { headers });
-  const expired = await expiredResponse.json();
-  assert.equal(expired.subscription.active, false);
-  assert.equal(expired.subscription.status, 'expired');
-
-  const secondActivation = await fetch(base + '/api/customer/subscription/activate', {
-    method: 'POST',
-    headers
-  });
-  assert.equal(secondActivation.status, 409);
-  assert.equal((await secondActivation.json()).error, 'Esta cuenta ya tiene una prueba o licencia registrada.');
+  assert.equal(activate.status, 410);
+  assert.match((await activate.json()).error, /desactivadas temporalmente/i);
+  const subscription = await fetch(base + '/api/customer/subscription', { headers });
+  assert.equal((await subscription.json()).subscription.active, false);
 });
 
 test('Firebase identity exchange creates one shared EC Audio customer session', async (t) => {
@@ -119,7 +104,7 @@ test('Firebase identity exchange creates one shared EC Audio customer session', 
 });
 
 
-test('Ko-fi membership webhook links a Firebase account and activates a monthly license once', async (t) => {
+test('billing and Ko-fi webhook remain disabled while EC Audio is free', async (t) => {
   const previous = {
     token: process.env.KOFI_VERIFICATION_TOKEN,
     tier: process.env.KOFI_MONTHLY_TIER_NAME,
@@ -136,10 +121,6 @@ test('Ko-fi membership webhook links a Firebase account and activates a monthly 
   app.use(express.json());
   installCustomerAccountApi(app, {
     db, jwt, bcrypt, jwtSecret: 'test-secret-with-at-least-forty-eight-characters',
-    firebaseTokenVerifier: async (token) => {
-      assert.equal(token, 'firebase-id-token');
-      return { uid: 'kofi-firebase-user', email: 'firebase-kofi@example.com', displayName: 'Ko-fi Test', emailVerified: true };
-    },
     loginLimiter: rateLimit({ windowMs: 60_000, limit: 50, standardHeaders: false, legacyHeaders: false })
   });
   const server = app.listen(0, '127.0.0.1');
@@ -158,42 +139,14 @@ test('Ko-fi membership webhook links a Firebase account and activates a monthly 
     }
   });
 
-  const linkResponse = await fetch(base + '/api/customer/billing/kofi-link', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer firebase-id-token' }
-  });
-  assert.equal(linkResponse.status, 200);
-  const link = await linkResponse.json();
-  assert.match(link.code, /^EC-[A-F0-9]{10}$/);
-
-  const payment = {
-    verification_token: 'kofi-test-secret',
-    kofi_transaction_id: 'kofi-tx-001',
-    message_id: 'kofi-message-001',
-    type: 'Subscription',
-    is_subscription_payment: true,
-    tier_name: 'EC Audio Monthly',
-    currency: 'USD',
-    amount: '9.99',
-    email: 'supporter@example.com',
-    message: 'EC Audio account code: ' + link.code
-  };
-  const sendPayment = () => fetch(base + '/api/webhooks/kofi', {
+  const plans = await fetch(base + '/api/customer/billing/plans');
+  assert.equal(plans.status, 410);
+  const webhook = await fetch(base + '/api/webhooks/kofi', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ data: JSON.stringify(payment) })
+    body: JSON.stringify({ data: JSON.stringify({ verification_token: 'kofi-test-secret' }) })
   });
-  const first = await sendPayment();
-  assert.equal(first.status, 200);
-  assert.equal((await first.json()).activated, true);
-  const account = db.prepare("SELECT id FROM customer_accounts WHERE firebase_uid='kofi-firebase-user'").get();
-  const subscription = db.prepare('SELECT status,plan,expires_at FROM customer_subscriptions WHERE customer_id=?').get(account.id);
-  assert.equal(subscription.status, 'active');
-  assert.equal(subscription.plan, 'monthly');
-  assert.ok(Date.parse(subscription.expires_at) > Date.now());
-
-  const duplicate = await sendPayment();
-  assert.equal(duplicate.status, 200);
-  assert.equal((await duplicate.json()).duplicate, true);
-  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM kofi_webhook_events').get().count, 1);
+  assert.equal(webhook.status, 200);
+  assert.deepEqual(await webhook.json(), { received: true, disabled: true });
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM customer_subscriptions').get().count, 0);
 });
