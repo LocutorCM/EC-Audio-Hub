@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { analyzeAndRecommend } from "./mix-doctor.js?v=20261128-2";
+import { analyzeAndRecommend } from "./mix-doctor.js?v=20261127-3";
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const $ = (id) => document.getElementById(id);
