@@ -59,16 +59,16 @@ function addTone(ctx,when,duration,freq,type,gain,pan=0,detune=0){
  osc.type=type;osc.frequency.setValueAtTime(freq,when);osc.detune.setValueAtTime(detune,when);
  amp.gain.setValueAtTime(.0001,when);amp.gain.exponentialRampToValueAtTime(Math.max(.0002,gain),Math.min(end,when+.018));
  amp.gain.setTargetAtTime(.0001,Math.min(end,when+Math.max(.04,duration*.68)),Math.max(.025,duration*.12));
- p.pan.setValueAtTime(Math.max(-1,Math.min(1,pan)),when);osc.connect(amp);amp.connect(p);p.connect(ctx.destination);osc.start(when);osc.stop(Math.min(ctx.length/ctx.sampleRate,end+.15));
+ p.pan.setValueAtTime(Math.max(-1,Math.min(1,pan)),when);osc.connect(amp);amp.connect(p);p.connect(ctx.__mixBus||ctx.destination);osc.start(when);osc.stop(Math.min(ctx.length/ctx.sampleRate,end+.15));
 }
 function addKick(ctx,t,level=.7){
  t=safeTime(ctx,t);level=finiteNumber(level,0);if(level<=0||t>=ctx.length/ctx.sampleRate)return;
- const end=ctx.length/ctx.sampleRate,o=ctx.createOscillator(),g=ctx.createGain();o.type="sine";o.frequency.setValueAtTime(115,t);o.frequency.exponentialRampToValueAtTime(42,Math.min(end,t+.16));g.gain.setValueAtTime(level,t);g.gain.exponentialRampToValueAtTime(.0001,Math.min(end,t+.22));o.connect(g);g.connect(ctx.destination);o.start(t);o.stop(Math.min(end,t+.23));
+ const end=ctx.length/ctx.sampleRate,o=ctx.createOscillator(),g=ctx.createGain();o.type="sine";o.frequency.setValueAtTime(115,t);o.frequency.exponentialRampToValueAtTime(42,Math.min(end,t+.16));g.gain.setValueAtTime(level,t);g.gain.exponentialRampToValueAtTime(.0001,Math.min(end,t+.22));o.connect(g);g.connect(ctx.__mixBus||ctx.destination);o.start(t);o.stop(Math.min(end,t+.23));
 }
 function addNoise(ctx,t,duration,level,highpass=5000){
  t=safeTime(ctx,t);duration=finiteNumber(duration,0);level=finiteNumber(level,0);highpass=finiteNumber(highpass,5000);if(duration<=0||level<=0||t>=ctx.length/ctx.sampleRate)return;
  duration=Math.min(duration,ctx.length/ctx.sampleRate-t);const size=Math.max(1,Math.ceil(ctx.sampleRate*duration)),b=ctx.createBuffer(1,size,ctx.sampleRate),d=b.getChannelData(0);for(let i=0;i<size;i++)d[i]=Math.random()*2-1;
- const src=ctx.createBufferSource(),f=ctx.createBiquadFilter(),g=ctx.createGain();src.buffer=b;f.type="highpass";f.frequency.setValueAtTime(Math.max(10,Math.min(highpass,ctx.sampleRate/2)),t);g.gain.setValueAtTime(level,t);g.gain.exponentialRampToValueAtTime(.0001,t+duration);src.connect(f);f.connect(g);g.connect(ctx.destination);src.start(t);src.stop(t+duration);
+ const src=ctx.createBufferSource(),f=ctx.createBiquadFilter(),g=ctx.createGain();src.buffer=b;f.type="highpass";f.frequency.setValueAtTime(Math.max(10,Math.min(highpass,ctx.sampleRate/2)),t);g.gain.setValueAtTime(level,t);g.gain.exponentialRampToValueAtTime(.0001,t+duration);src.connect(f);f.connect(g);g.connect(ctx.__mixBus||ctx.destination);src.start(t);src.stop(t+duration);
 }
 function addChord(ctx,t,dur,root,quality,style,pianoLike=false){
  const intervals=quality==="minor"?[0,3,7]:[0,4,7];
@@ -92,30 +92,39 @@ async function buildArrangement(input,style,tempoMode,mood,notes,onProgress){
  // Route synth helpers to the shared bus.
  const originalCreateOsc=ctx.createOscillator.bind(ctx);
  const bars=Math.ceil(duration/bar),progression=chordProgression(style);
+ // Variaciones aleatorias para que cada generación tenga una estructura y groove distintos.
+ const variation=Math.floor(Math.random()*6);
+ if(variation===1)progression.reverse();
+ else if(variation===2)progression.splice(0,progression.length,...[0,3,4,5]);
+ else if(variation===3)progression.splice(0,progression.length,...[0,5,4,3]);
+ else if(variation===4)progression.splice(0,progression.length,...[5,3,0,4]);
+ const groove=Math.floor(Math.random()*4);
+ const drumChance=[.72,.88,.62,.95][groove];
+ ctx.__mixBus=bus;
  const baseMidi=48+key;
  for(let b=0;b<bars;b++){
-  const t=b*bar;if(t>=duration)break;const degree=progression[b%progression.length],root=baseMidi+scale[degree%7]+(degree>=5?12:0);
+  const t=b*bar;if(t>=duration)break;const degree=progression[b%progression.length],root=baseMidi+scale[degree%7]+(degree>=5?12:0)+((variation===5&&b%2)?12:0);
   const quality=(degree===1||degree===2||degree===5)&&scale===scales.minor?"minor":"major";
   addChord(ctx,t,Math.min(bar+.1,duration-t),root,quality,style,pianoLike);
   for(let q=0;q<4;q++){
    const bt=t+q*beat;if(bt>=duration)continue;
    addTone(ctx,bt,Math.min(beat*.85,duration-bt),midiHz(root-12),"triangle",.09,0);
-   if(!noDrums&&(q===0||q===2))addKick(ctx,bt,style==="trap"?.85:.65);
-   if(!noDrums&&(q===1||q===3))addNoise(ctx,bt,.13,style==="rock"?.25:.16,1800);
+   if(!noDrums&&(q===0||q===2||(groove===1&&q===3&&Math.random()<.45)))addKick(ctx,bt,style==="trap"?.85:.65);
+   if(!noDrums&&(q===1||q===3)&&Math.random()<drumChance)addNoise(ctx,bt,.13,style==="rock"?.25:.16,1800);
    if(["urban","rap","trap","pop","rock","rnb"].includes(style)){
-    if(!noDrums&&(q===0||q===2))addNoise(ctx,bt+beat*.5,.055,.07,7000);
+    if(!noDrums&&(q===0||q===2||groove===2&&q===1)&&Math.random()<drumChance)addNoise(ctx,bt+beat*(groove===3?.25:.5),.055,.07,7000);
    }
   }
   if(["worship","ballad","acoustic","cinematic"].includes(style)){
    for(let eighth=0;eighth<8;eighth++){
     const at=t+eighth*beat/2;if(at>=duration)continue;
-    const note=root+scale[(eighth%3)*2%7]+12;
+    const note=root+scale[(eighth%3)*2%7]+12+(Math.random()<.22?12:0);
     addTone(ctx,at,Math.min(.22,duration-at),midiHz(note),"triangle",.035,eighth%2?-.25:.25);
    }
   }else{
    for(let eighth=0;eighth<8;eighth++){
     const at=t+eighth*beat/2;if(at>=duration)continue;
-    addTone(ctx,at,Math.min(.09,duration-at),midiHz(root+12+(eighth%3===1?7:0)),"square",.012,eighth%2?-.3:.3);
+    addTone(ctx,at,Math.min(.09,duration-at),midiHz(root+12+(eighth%3===1?7:0)+(Math.random()<.18?12:0)),"square",.012,eighth%2?-.3:.3);
    }
   }
   if(b%4===0)onProgress(18+Math.round(55*b/Math.max(1,bars)),"Componiendo acordes, bajo y ritmo…");
