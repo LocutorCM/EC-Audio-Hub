@@ -124,6 +124,7 @@ jobs:
           <key>CFBundleIdentifier</key><string>com.ecaudio.hub.client</string>
           <key>CFBundleExecutable</key><string>EC-Audio-Hub-Client</string>
           <key>CFBundlePackageType</key><string>APPL</string>
+          <key>CFBundleIconFile</key><string>ECAppIcon</string>
           <key>LSMinimumSystemVersion</key><string>12.0</string>
           <key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>com.ecaudio.hub.client.auth</string><key>CFBundleURLSchemes</key><array><string>ecaudiohub</string></array></dict></array>
           </dict></plist>
