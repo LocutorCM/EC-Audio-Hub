@@ -35,7 +35,7 @@ footer{border-top:1px solid #ffffff12;padding:24px 0;color:#777e91;font-size:9px
 <div class="row"><div><label class="field" for="style">Estilo musical</label><select id="style"><option value="worship">Adoración / Worship</option><option value="ballad">Balada</option><option value="acoustic">Acústico</option><option value="pop">Pop</option><option value="urban">Urbano / Reggaetón</option><option value="rap">Rap / Hip-hop</option><option value="trap">Trap</option><option value="rock">Rock</option><option value="rnb">R&B / Soul</option><option value="cinematic">Cinemático</option></select></div><div><label class="field" for="tempo">Tempo</label><select id="tempo"><option value="natural">Seguir mi voz</option><option value="slow">Lento</option><option value="medium">Medio</option><option value="fast">Rápido</option></select></div></div>
 <label class="field" for="mood">Ambiente / emoción</label><input id="mood" type="text" maxlength="120" placeholder="Ej. emotiva, esperanzadora, íntima y épica">
 <label class="field" for="notes">Indicaciones adicionales (opcional)</label><textarea id="notes" maxlength="500" placeholder="Ej. comienza solo con piano, añade batería en el coro, guitarras ambientales..."></textarea>
-<label class="consent"><input id="consent" type="checkbox"><span>Confirmo que tengo derecho a usar esta grabación y acepto que se envíe temporalmente al proveedor externo fal.ai para generar la instrumental. No subas grabaciones privadas de otras personas sin su permiso.</span></label>
+<label class="consent"><input id="consent" type="checkbox"><span>Confirmo que tengo derecho a usar esta grabación y acepto que se envíe al proveedor externo fal.ai y se almacene en su CDN para generar la instrumental. No subas grabaciones privadas de otras personas sin su permiso.</span></label>
 <button class="primary" id="generateButton" disabled>✦ CREAR MI INSTRUMENTAL</button>
 <p class="muted" style="margin:12px 0 0;text-align:center">Necesitas iniciar sesión. La generación usa créditos de IA y puede tener un costo por uso.</p>
 <div class="status" id="status"><div class="statushead"><span id="statusText">Preparando audio…</span><b id="statusPercent">0%</b></div><div class="progress"><i id="progressBar"></i></div></div>
@@ -47,7 +47,7 @@ footer{border-top:1px solid #ffffff12;padding:24px 0;color:#777e91;font-size:9px
 <audio id="resultPlayer" controls hidden></audio>
 <a class="download" id="downloadLink" href="#" download="EC-AI-Instrumental.mp3">↓ DESCARGAR INSTRUMENTAL</a>
 <div class="tip"><b>RESPETO A TU INTERPRETACIÓN</b><span>La IA usa la grabación como referencia para intentar seguir su melodía y fraseo. El resultado es una nueva producción generada por IA: puede no coincidir exactamente en cada nota o compás.</span></div>
-<div class="notice">Tu voz se sube al almacenamiento del proveedor para generar el audio. No uses material confidencial. La disponibilidad y el costo dependen de tu cuenta y de los servicios de IA conectados.</div>
+<div class="notice">Tu voz se envía al almacenamiento de fal.ai. Sus enlaces de archivos pueden ser públicos y su retención depende de la configuración y políticas del proveedor. No subas grabaciones confidenciales o de terceros sin permiso. La generación puede tener un costo por uso.</div>
 </section>
 </div>
 </main>
