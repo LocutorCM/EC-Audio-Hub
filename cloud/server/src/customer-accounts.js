@@ -274,6 +274,7 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_accounts_kofi_email ON customer_accounts(kofi_email COLLATE NOCASE) WHERE kofi_email IS NOT NULL');
 
   app.get('/api/customer/billing/plans', (_req, res) => {
+    return res.status(410).json({ error: 'Los planes de pago están desactivados temporalmente.' });
     if (!kofiVerificationToken || !kofiMonthlyTierName) {
       return res.status(503).json({ error: 'Los pagos de Ko-fi todavía no están configurados.' });
     }
@@ -281,6 +282,7 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
   });
 
   app.post('/api/customer/billing/kofi-link', customerAuth, (req, res) => {
+    return res.status(410).json({ error: 'Los pagos están desactivados temporalmente.' });
     if (!kofiVerificationToken || !kofiMonthlyTierName) {
       return res.status(503).json({ error: 'Los pagos de Ko-fi todavía no están configurados.' });
     }
@@ -297,7 +299,8 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
     return res.json({ code: rawCode, url: kofiPageURL, instructions: 'Pega este código en el mensaje de tu pago o primera membresía de Ko-fi.' });
   });
 
-  app.post('/api/webhooks/kofi', (req, res) => {
+  app.post('/api/webhooks/kofi', (_req, res) => {
+    return res.status(200).json({ received: true, disabled: true });
     if (!kofiVerificationToken) return res.status(503).json({ error: 'El webhook de Ko-fi no está configurado.' });
     let payload;
     try {
