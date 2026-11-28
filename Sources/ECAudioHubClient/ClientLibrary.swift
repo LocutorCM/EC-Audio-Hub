@@ -117,7 +117,10 @@ final class ClientLibrary: ObservableObject {
             var found: [HubPlugin] = []
 
             for release in releases where !release.draft && !release.prerelease {
-                let metadata = parseMetadata(release.body ?? "")
+                let releaseBody = release.body ?? ""
+                // El catálogo del Client utiliza el mismo canal de publicaciones del Admin Hub.
+                guard releaseBody.contains("EC_AUDIO_PLUGIN_RELEASE") else { continue }
+                let metadata = parseMetadata(releaseBody)
                 guard metadata["plugin_name"] != nil,
                       let fileName = metadata["file_name"],
                       let checksum = metadata["sha256"] else { continue }
