@@ -25,29 +25,29 @@ footer{border-top:1px solid #ffffff12;padding:24px 0;color:#777e91;font-size:9px
 <body>
 <header class="wrap"><a class="brand" href="./"><span class="logo">EC</span><span>EC AUDIO</span></a><div style="display:flex;gap:18px"><a class="back" href="./account.html">Mi cuenta ↗</a><a class="back" href="./">← Volver</a></div></header>
 <main class="wrap">
-<div class="hero"><div class="eyebrow">EC AUDIO / AI MUSIC STUDIO</div><h1>EC AI <span>INSTRUMENTAL</span></h1><p>Sube una grabación a capela y genera un acompañamiento instrumental que tome tu voz como referencia musical. Elige el estilo, el ambiente y la energía.</p></div>
+<div class="hero"><div class="eyebrow">EC AUDIO / AI MUSIC STUDIO</div><h1>EC AI <span>INSTRUMENTAL</span></h1><p>Sube tu voz y crea un acompañamiento musical directamente en tu navegador. EC Audio analiza la tonalidad aproximada y construye una base instrumental para que puedas cantar encima.</p></div>
 <div class="layout">
 <section class="panel">
 <h2>01 / Tu voz</h2><p class="muted">Para mejores resultados, usa una voz sola, sin instrumental de fondo, con la melodía completa y una grabación limpia.</p>
-<label class="drop" id="dropzone" for="voiceFile"><div class="upload-icon">♫</div><strong>Selecciona o arrastra tu voz</strong><span>WAV · MP3 · M4A · AAC · OGG · Máx. 50 MB</span><input id="voiceFile" type="file" accept=".wav,.mp3,.m4a,.aac,.ogg,audio/*"></label>
+<label class="drop" id="dropzone" for="voiceFile"><div class="upload-icon">♫</div><strong>Selecciona o arrastra tu voz</strong><span>WAV · MP3 · M4A · AAC · OGG · Máx. 80 MB</span><input id="voiceFile" type="file" accept=".wav,.mp3,.m4a,.aac,.ogg,audio/*"></label>
 <div class="file" id="fileLine" hidden><div style="font-size:21px;color:var(--lime)">♫</div><div class="filemeta"><b id="fileName"></b><small id="fileSize"></small></div><button class="remove" id="removeFile" type="button">×</button></div>
 <audio id="voicePlayer" controls hidden></audio>
 <div class="row"><div><label class="field" for="style">Estilo musical</label><select id="style"><option value="worship">Adoración / Worship</option><option value="ballad">Balada</option><option value="acoustic">Acústico</option><option value="pop">Pop</option><option value="urban">Urbano / Reggaetón</option><option value="rap">Rap / Hip-hop</option><option value="trap">Trap</option><option value="rock">Rock</option><option value="rnb">R&B / Soul</option><option value="cinematic">Cinemático</option></select></div><div><label class="field" for="tempo">Tempo</label><select id="tempo"><option value="natural">Seguir mi voz</option><option value="slow">Lento</option><option value="medium">Medio</option><option value="fast">Rápido</option></select></div></div>
 <label class="field" for="mood">Ambiente / emoción</label><input id="mood" type="text" maxlength="120" placeholder="Ej. emotiva, esperanzadora, íntima y épica">
 <label class="field" for="notes">Indicaciones adicionales (opcional)</label><textarea id="notes" maxlength="500" placeholder="Ej. comienza solo con piano, añade batería en el coro, guitarras ambientales..."></textarea>
-<label class="consent"><input id="consent" type="checkbox"><span>Confirmo que tengo derecho a usar esta grabación y acepto que se envíe al proveedor externo fal.ai y se almacene en su CDN para generar la instrumental. No subas grabaciones privadas de otras personas sin su permiso.</span></label>
+<div class="notice">Procesamiento 100% local: tu voz no se sube a ningún servidor. Se analiza en tu dispositivo y se usa como referencia para estimar la tonalidad. La instrumental se sintetiza aquí mismo.</div>
 <button class="primary" id="generateButton" disabled>✦ CREAR MI INSTRUMENTAL</button>
-<p class="muted" style="margin:12px 0 0;text-align:center">Necesitas iniciar sesión. La generación usa créditos de IA y puede tener un costo por uso.</p>
+<p class="muted" style="margin:12px 0 0;text-align:center">Necesitas iniciar sesión. El procesamiento se realiza en tu navegador; no requiere Render ni servicios externos.</p>
 <div class="status" id="status"><div class="statushead"><span id="statusText">Preparando audio…</span><b id="statusPercent">0%</b></div><div class="progress"><i id="progressBar"></i></div></div>
 <div class="error" id="errorBox" role="alert"></div>
 </section>
 <section class="panel">
 <h2>02 / Tu instrumental</h2><p class="muted">Escucha el resultado y descarga la pista para mezclarla con tu voz.</p>
-<div class="result" id="result"><div style="font-size:30px;margin-bottom:12px">◉</div><b id="resultTitle">Tu instrumental aparecerá aquí</b><span id="resultText">Sube tu voz, elige un estilo y genera tu acompañamiento.</span></div>
+<div class="result" id="result"><div style="font-size:30px;margin-bottom:12px">◉</div><b id="resultTitle">Tu instrumental aparecerá aquí</b><span id="resultText">Sube tu voz, elige un estilo y crea una base instrumental local.</span></div>
 <audio id="resultPlayer" controls hidden></audio>
 <a class="download" id="downloadLink" href="#" download="EC-AI-Instrumental.mp3">↓ DESCARGAR INSTRUMENTAL</a>
-<div class="tip"><b>RESPETO A TU INTERPRETACIÓN</b><span>La IA usa la grabación como referencia para intentar seguir su melodía y fraseo. El resultado es una nueva producción generada por IA: puede no coincidir exactamente en cada nota o compás.</span></div>
-<div class="notice">Tu voz se envía al almacenamiento de fal.ai. Sus enlaces de archivos pueden ser públicos y su retención depende de la configuración y políticas del proveedor. No subas grabaciones confidenciales o de terceros sin permiso. La generación puede tener un costo por uso.</div>
+<div class="tip"><b>RESPETO A TU INTERPRETACIÓN</b><span>EC Audio estima la tonalidad de la grabación y crea acordes, bajo, batería y arreglos sincronizados al tempo elegido. Es una base generada por síntesis local, no una IA que compone una melodía exacta a partir de cada nota vocal.</span></div>
+
 </section>
 </div>
 </main>
