@@ -43,9 +43,10 @@ function createSafeOfflineContext(channels,frames,sampleRate){
   let rate=Number(sampleRate);
   if(!Number.isFinite(rate)||rate<8000||rate>192000)rate=48000;
   const length=Number(frames);
-  if(!Number.isFinite(length)||length<1)throw new Error("No se pudo determinar la duración del audio. Vuelve a cargar el archivo.");
+  if(!Number.isFinite(length)||length<1)throw new Error("El navegador no pudo leer la cantidad de muestras del audio. Vuelve a cargarlo en WAV o MP3.");
   const frameCount=Math.trunc(length);
   if(!Number.isSafeInteger(frameCount)||frameCount<1||frameCount>rate*600)throw new Error("La duración del audio no es válida o supera el límite de 10 minutos.");
+  if(typeof OfflineAudioContext!=="function")throw new Error("Este navegador no ofrece OfflineAudioContext. Actualiza Chrome o Safari.");
   return new OfflineAudioContext(channelCount,frameCount,rate);
 }
 function measureIntegratedLUFS(buffer){
@@ -137,7 +138,10 @@ function applyStereoWidth(buffer,width){
   return buffer;
 }
 async function renderMaster(input,profile,onProgress){
-  const rate=48000,channels=Math.min(2,input.numberOfChannels),frames=Math.ceil(input.duration*rate);
+  const rate=48000,channels=Math.min(2,input.numberOfChannels);
+  const sourceRate=Number(input.sampleRate),sourceFrames=Number(input.length);
+  if(!Number.isFinite(sourceRate)||sourceRate<8000||!Number.isSafeInteger(sourceFrames)||sourceFrames<1)throw new Error("El audio se decodificó sin una duración válida. Vuelve a cargarlo; si continúa, conviértelo a WAV PCM.");
+  const frames=Math.ceil(sourceFrames*rate/sourceRate);
   if(!Number.isFinite(frames)||frames<1||frames>rate*600)throw new Error("La canción supera el límite de 10 minutos para el procesamiento local.");
   const offline=createSafeOfflineContext(channels,frames,rate);
   const source=offline.createBufferSource();source.buffer=input;
@@ -222,7 +226,8 @@ $("masterButton").addEventListener("click",async()=>{
     setProgress(5,"Leyendo archivo de audio…");
     const bytes=await selectedFile.arrayBuffer();setProgress(14,"Analizando la mezcla…");
     const decoded=await context.decodeAudioData(bytes.slice(0));
-    if(decoded.duration>600)throw new Error("La canción supera el límite de 10 minutos para el procesamiento local.");
+    if(!decoded||!Number.isSafeInteger(decoded.length)||decoded.length<1||!Number.isFinite(decoded.sampleRate)||decoded.sampleRate<8000)throw new Error("El navegador no pudo leer la duración del archivo. Prueba exportarlo como WAV PCM o MP3 y vuelve a cargarlo.");
+    if(!Number.isFinite(decoded.duration)||decoded.duration<=0||decoded.duration>600)throw new Error("La duración del audio no es válida o supera el límite de 10 minutos.");
     if(decoded.numberOfChannels>2)throw new Error("El archivo tiene más de dos canales. Exporta una mezcla estéreo e inténtalo de nuevo.");
     setProgress(20,"EC Mix Doctor: analizando espectro, dinámica y estéreo…");
     const analysis=await analyzeAndRecommend(decoded);
