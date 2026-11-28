@@ -89,71 +89,114 @@ function addChord(ctx,t,dur,root,quality,style,pianoLike=false){
  addTone(ctx,t,dur,midiHz(root+12),"triangle",pad?.045:.032,0,-5);
  addTone(ctx,t,dur,midiHz(root+19),"sine",.018,.12,2);
 }
-async function buildArrangement(input,style,tempoMode,mood,notes,onProgress){
+function addPiano(ctx,t,dur,note,level=.12,pan=0){
+ t=safeTime(ctx,t);if(dur<=0||t>=ctx.length/ctx.sampleRate)return;
+ const end=Math.min(ctx.length/ctx.sampleRate,t+dur),osc=ctx.createOscillator(),harm=ctx.createOscillator(),g=ctx.createGain(),hg=ctx.createGain(),p=ctx.createStereoPanner();
+ osc.type="triangle";osc.frequency.setValueAtTime(midiHz(note),t);
+ harm.type="sine";harm.frequency.setValueAtTime(midiHz(note+12),t);
+ g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(Math.max(.0002,level),Math.min(end,t+.008));g.gain.exponentialRampToValueAtTime(.0001,Math.min(end,t+Math.max(.09,dur*.82)));
+ hg.gain.setValueAtTime(.0001,t);hg.gain.exponentialRampToValueAtTime(Math.max(.0002,level*.28),Math.min(end,t+.012));hg.gain.exponentialRampToValueAtTime(.0001,Math.min(end,t+Math.max(.07,dur*.55)));
+ p.pan.setValueAtTime(Math.max(-1,Math.min(1,pan)),t);osc.connect(g);harm.connect(hg);g.connect(p);hg.connect(p);p.connect(ctx.__mixBus||ctx.destination);
+ osc.start(t);harm.start(t);osc.stop(Math.min(ctx.length/ctx.sampleRate,end+.02));harm.stop(Math.min(ctx.length/ctx.sampleRate,end+.02));
+}
+function add808(ctx,t,dur,note,level=.42,slide=0){
+ t=safeTime(ctx,t);if(dur<=0||t>=ctx.length/ctx.sampleRate)return;
+ const end=Math.min(ctx.length/ctx.sampleRate,t+dur),o=ctx.createOscillator(),g=ctx.createGain(),sh=ctx.createWaveShaper();
+ const curve=new Float32Array(256);for(let i=0;i<256;i++){const x=i*2/255-1;curve[i]=Math.tanh(x*2.1);}
+ sh.curve=curve;sh.oversample="2x";o.type="sine";o.frequency.setValueAtTime(midiHz(note),t);
+ if(slide)o.frequency.exponentialRampToValueAtTime(midiHz(note+slide),Math.min(end,t+.12));
+ g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(Math.max(.0002,level),Math.min(end,t+.012));g.gain.setTargetAtTime(.0001,Math.min(end,t+Math.max(.08,dur*.68)),Math.max(.035,dur*.14));
+ o.connect(sh);sh.connect(g);g.connect(ctx.__mixBus||ctx.destination);o.start(t);o.stop(Math.min(ctx.length/ctx.sampleRate,end+.04));
+}
+function addClap(ctx,t,level=.2){
+ addNoise(ctx,t,.11,level,1500);addNoise(ctx,t+.012,.09,level*.55,1800);addNoise(ctx,t+.026,.075,level*.3,2200);
+}
+async function buildArrangement(input,style,bpmValue,mood,notes,onProgress){
  const rate=44100,channels=2,duration=Math.min(input.duration,300),frames=Math.ceil(duration*rate);
  if(!frames||duration>300)throw new Error("La grabación debe durar 5 minutos o menos para generar el acompañamiento local.");
  const AudioCtx=window.OfflineAudioContext||window.webkitOfflineAudioContext;
  if(!AudioCtx)throw new Error("Este navegador no admite síntesis de audio local. Actualiza Chrome o Safari.");
- const key=estimateKey(input),moodText=(mood||"").toLowerCase(),minorMood=/triste|oscura|oscuro|melanc|dram[aá]tic|nost[aá]lgic/.test(moodText),majorMood=/feliz|alegre|esperan|luminos|victor|triunf/.test(moodText),scale=minorMood?scales.minor:majorMood?scales.major:(style==="ballad"||style==="worship"||style==="cinematic"?scales.major:scales.minor),notesText=(notes||"").toLowerCase(),noDrums=/sin bater[ií]a|no drums|sin percusi[oó]n/.test(notesText),pianoLike=/piano|teclas/.test(notesText);
- const bpm=tempoMode==="slow"?76:tempoMode==="medium"?100:tempoMode==="fast"?124:96;
- const beat=60/bpm,bar=beat*4,ctx=new AudioCtx(channels,frames,rate);
- const master=ctx.createGain();master.gain.value=.72;
- const comp=ctx.createDynamicsCompressor();comp.threshold.value=-12;comp.knee.value=8;comp.ratio.value=2.5;comp.attack.value=.012;comp.release.value=.2;master.connect(comp);comp.connect(ctx.destination);
- const oldDestination=ctx.destination;
- // All voices are scheduled into the offline context destination through a shared mix bus.
- const bus=ctx.createGain();bus.gain.value=.78;const limiter=ctx.createDynamicsCompressor();limiter.threshold.value=-4;limiter.ratio.value=12;limiter.attack.value=.003;limiter.release.value=.12;bus.connect(limiter);limiter.connect(oldDestination);
- // Route synth helpers to the shared bus.
- const originalCreateOsc=ctx.createOscillator.bind(ctx);
- const bars=Math.ceil(duration/bar),progression=chordProgression(style);
- // Variaciones aleatorias para que cada generación tenga una estructura y groove distintos.
- const variation=Math.floor(Math.random()*6);
- if(variation===1)progression.reverse();
- else if(variation===2)progression.splice(0,progression.length,...[0,3,4,5]);
- else if(variation===3)progression.splice(0,progression.length,...[0,5,4,3]);
- else if(variation===4)progression.splice(0,progression.length,...[5,3,0,4]);
- const groove=Math.floor(Math.random()*4);
- const drumChance=[.72,.88,.62,.95][groove];
- ctx.__mixBus=bus;
- const baseMidi=48+key;
+ const key=estimateKey(input),moodText=(mood||"").toLowerCase(),minorMood=/triste|oscura|oscuro|melanc|dram[aá]tic|nost[aá]lgic/.test(moodText),scale=minorMood?scales.minor:(style==="worship"||style==="pop"||style==="house"?scales.major:scales.minor);
+ const notesText=(notes||"").toLowerCase(),noDrums=/sin bater[ií]a|no drums|sin percusi[oó]n/.test(notesText),pianoRequested=/piano|teclas/.test(notesText);
+ const bpm=Math.max(60,Math.min(200,Math.round(Number(bpmValue)||96))),beat=60/bpm,bar=beat*4,step=bar/16;
+ const ctx=new AudioCtx(channels,frames,rate);
+ const master=ctx.createGain();master.gain.value=.82;
+ const comp=ctx.createDynamicsCompressor();comp.threshold.value=-13;comp.knee.value=8;comp.ratio.value=2.8;comp.attack.value=.01;comp.release.value=.18;
+ const bus=ctx.createGain();bus.gain.value=.88;
+ const limiter=ctx.createDynamicsCompressor();limiter.threshold.value=-3;limiter.ratio.value=12;limiter.attack.value=.003;limiter.release.value=.12;
+ bus.connect(master);master.connect(comp);comp.connect(limiter);limiter.connect(ctx.destination);ctx.__mixBus=bus;
+ const profiles={
+  urban:{kick:[0,6,8,14],snare:[4,12],hat:2,bass:"808",keys:"pluck",chord:"offbeat"},
+  reggaeton:{kick:[0,6,8,14],snare:[4,12],hat:2,bass:"round",keys:"pluck",chord:"offbeat"},
+  trap:{kick:[0,3,7,10,14],snare:[8],hat:1,bass:"808",keys:"pianoRoll",chord:"sparse"},
+  drill:{kick:[0,3,7,11,14],snare:[8],hat:1,bass:"808slide",keys:"pianoRoll",chord:"dark"},
+  rap:{kick:[0,7,10],snare:[4,12],hat:2,bass:"round",keys:"piano",chord:"sample"},
+  boom_bap:{kick:[0,7,10,15],snare:[4,12],hat:2,bass:"round",keys:"sample",chord:"sample"},
+  pop:{kick:[0,4,8,12],snare:[4,12],hat:2,bass:"round",keys:"piano",chord:"block"},
+  rock:{kick:[0,8],snare:[4,12],hat:2,bass:"round",keys:"guitar",chord:"block"},
+  worship:{kick:[0,8],snare:[4,12],hat:2,bass:"round",keys:"piano",chord:"wide"},
+  ballad:{kick:[0,8],snare:[4,12],hat:4,bass:"round",keys:"piano",chord:"wide"},
+  acoustic:{kick:[0,8],snare:[4,12],hat:2,bass:"round",keys:"guitar",chord:"wide"},
+  rnb:{kick:[0,7,10],snare:[4,12],hat:2,bass:"round",keys:"pianoRoll",chord:"jazzy"},
+  cinematic:{kick:[0,8],snare:[12],hat:4,bass:"round",keys:"piano",chord:"wide"},
+  afrobeat:{kick:[0,5,8,13],snare:[4,12],hat:2,bass:"round",keys:"pluck",chord:"offbeat"},
+  house:{kick:[0,4,8,12],snare:[4,12],hat:2,bass:"round",keys:"piano",chord:"offbeat"}
+ };
+ const profile=profiles[style]||profiles.pop,progression=style==="rock"?[0,3,4,0]:style==="worship"||style==="pop"||style==="ballad"?[0,4,5,3]:[0,5,3,4];
+ const variation=Math.floor(Math.random()*4),baseMidi=48+key,bars=Math.ceil(duration/bar);
+ const chordIntervals=(degree)=>{const root=baseMidi+scale[degree%7]+(degree>=5?12:0);const minor=[1,2,5].includes(degree);return {root,notes:[root,root+(minor?3:4),root+7,root+12]};};
+ const bassPattern=profile.bass==="808"||profile.bass==="808slide"?[0,0,7,0,12,7,0,10]:[0,7,12,7,0,7,10,7];
  for(let b=0;b<bars;b++){
-  const t=b*bar;if(t>=duration)break;const degree=progression[b%progression.length],root=baseMidi+scale[degree%7]+(degree>=5?12:0)+((variation===5&&b%2)?12:0);
-  const quality=(degree===1||degree===2||degree===5)&&scale===scales.minor?"minor":"major";
-  addChord(ctx,t,Math.min(bar+.1,duration-t),root,quality,style,pianoLike);
-  for(let q=0;q<4;q++){
-   const bt=t+q*beat;if(bt>=duration)continue;
-   addTone(ctx,bt,Math.min(beat*.92,duration-bt),midiHz(root-12),"triangle",.145,0);
-   if(q===0||q===2)addTone(ctx,bt,Math.min(beat*.8,duration-bt),midiHz(root-24),"sine",.055,0);
-   if(!noDrums&&(q===0||q===2||(groove===1&&q===3&&Math.random()<.45)))addKick(ctx,bt,style==="trap"?.92:.78);
-   if(!noDrums&&(q===1||q===3))addSnare(ctx,bt+beat*.002,style==="rock"?.28:.23);
-   if(!noDrums){
-    const hatStep=beat/2;
-    for(let h=0;h<2;h++){
-     const hatTime=bt+h*hatStep;
-     if(hatTime<duration&&Math.random()<(groove===2?.72:.9))addHat(ctx,hatTime,.045+(Math.random()*.025),groove===3&&h===1);
+  const t=b*bar;if(t>=duration)break;
+  const degree=progression[(b+variation)%progression.length],ch=chordIntervals(degree),root=ch.root,barEnd=Math.min(duration,t+bar);
+  // Acordes y teclados: piano realista sintetizado, acordes cortos o pads según el estilo.
+  const chordTimes=profile.chord==="offbeat"?[2,6,10,14]:profile.chord==="sparse"?[0,8]:profile.chord==="sample"?[0,6,12]:[0];
+  for(const s of chordTimes){const at=t+s*step;if(at>=duration)continue;const dur=profile.chord==="offbeat"?step*2.7:profile.chord==="sparse"?beat*1.7:bar*.88;
+   ch.notes.slice(0,profile.chord==="jazzy"?4:3).forEach((n,i)=>{
+    const pitch=n+(profile.chord==="dark"&&i===1?-12:0);
+    if(profile.keys==="piano"||profile.keys==="pianoRoll"||pianoRequested)addPiano(ctx,at,dur,pitch,profile.chord==="wide"?.105:.085,(i-1)*.22);
+    else addPluck(ctx,at,dur,pitch,.055,(i-1)*.25);
+   });
+  }
+  // Patrones de batería de 16 pasos, diferentes para cada género.
+  if(!noDrums){
+   for(let s=0;s<16;s++){
+    const at=t+s*step;if(at>=duration)continue;
+    if(profile.kick.includes(s))addKick(ctx,at,style==="trap"||style==="drill"?.88:.74);
+    if(profile.snare.includes(s)){if(["urban","reggaeton","house","afrobeat"].includes(style))addClap(ctx,at,.19);else addSnare(ctx,at,style==="rock"?.32:.25);}
+    if(s%profile.hat===0){
+     const open=(style==="house"&&s%4===2)||(style==="trap"&&s===14);
+     addHat(ctx,at,style==="rock"?.075:.052,open);
     }
-    if((style==="trap"||style==="urban"||style==="rap")&&Math.random()<.5)addHat(ctx,bt+beat*.75,.035);
+    if((style==="trap"||style==="drill")&&[6,7,14,15].includes(s))addHat(ctx,at,.045);
    }
+   // Golpes fantasma y fills variables al final de cada segundo compás.
+   if(b%2===1){if(["rap","boom_bap","rnb"].includes(style))addSnare(ctx,t+bar-step*2,.09);if(["trap","drill"].includes(style))for(let j=0;j<4;j++)addHat(ctx,t+bar-step*4+j*step,.035);}
   }
-  if(["worship","ballad","acoustic","cinematic"].includes(style)){
-   for(let eighth=0;eighth<8;eighth++){
-    const at=t+eighth*beat/2;if(at>=duration)continue;
-    const note=root+scale[(eighth%3)*2%7]+12+(Math.random()<.22?12:0);
-    addPluck(ctx,at,Math.min(.28,duration-at),note,.052,eighth%2?-.35:.35);
-   }
+  // Bajo: sub 808 con slides para trap/drill; bajo redondo para los demás estilos.
+  for(let q=0;q<8;q++){
+   const at=t+q*beat/2;if(at>=duration)continue;
+   const shouldPlay=profile.bass==="808"||profile.bass==="808slide"?[0,3,4,6].includes(q):[0,2,4,6].includes(q);
+   if(!shouldPlay)continue;
+   const note=root-12+(bassPattern[(q+b+variation)%bassPattern.length]||0);
+   const dur=Math.min(beat*(q%2?.42:.78),duration-at);
+   if(profile.bass==="808"||profile.bass==="808slide")add808(ctx,at,dur,note,profile.bass==="808slide"?.38:.34,profile.bass==="808slide"&&q===6?7:0);
+   else addTone(ctx,at,dur,midiHz(note),"triangle",.12,0);
+  }
+  // Arpegios y rolls melódicos: trap/drill usan semicorcheas; otros estilos usan figuras propias.
+  if(profile.keys==="pianoRoll"){
+   const roll=[0,2,4,7,4,2,7,4,0,2,4,7,9,7,4,2];
+   for(let s=0;s<16;s++){const at=t+s*step;if(at<duration)addPiano(ctx,at,Math.min(step*1.7,duration-at),ch.notes[0]+12+roll[(s+variation)%roll.length],s%4===3?.075:.055,s%2?-.3:.3);}
+  }else if(profile.keys==="piano"||profile.keys==="guitar"){
+   for(let q=0;q<8;q++){const at=t+q*beat/2;if(at<duration){const n=ch.notes[(q+variation)%3]+12; if(profile.keys==="piano")addPiano(ctx,at,Math.min(beat*.38,duration-at),n,.07,q%2?-.3:.3);else addPluck(ctx,at,Math.min(beat*.42,duration-at),n,.045,q%2?-.3:.3);}}
   }else{
-   for(let eighth=0;eighth<8;eighth++){
-    const at=t+eighth*beat/2;if(at>=duration)continue;
-    addPluck(ctx,at,Math.min(.16,duration-at),root+12+(eighth%3===1?7:0)+(Math.random()<.18?12:0),.032,eighth%2?-.4:.4);
-   }
+   for(let q=0;q<4;q++){const at=t+q*beat;if(at<duration)addPluck(ctx,at,Math.min(beat*.6,duration-at),ch.notes[(q+variation)%3]+12,.045,q%2?-.35:.35);}
   }
-  if(b%4===0)onProgress(18+Math.round(55*b/Math.max(1,bars)),"Componiendo acordes, bajo y ritmo…");
+  if(b%3===0)onProgress(18+Math.round(55*b/Math.max(1,bars)),"Creando patrón de "+style+" · "+bpm+" BPM…");
  }
- // Reduce harsh high-frequency content and render.
  const rendered=await ctx.startRendering();onProgress(86,"Finalizando y exportando WAV estéreo…");
- // Normalize conservatively without clipping.
  let peak=0;for(let c=0;c<rendered.numberOfChannels;c++){const d=rendered.getChannelData(c);for(let i=0;i<d.length;i++)peak=Math.max(peak,Math.abs(d[i]));}
- const gain=peak>.92?.92/peak:1;
- if(gain!==1){for(let c=0;c<rendered.numberOfChannels;c++){const d=rendered.getChannelData(c);for(let i=0;i<d.length;i++)d[i]*=gain;}}
+ const gain=peak>.92?.92/peak:1;if(gain!==1)for(let c=0;c<rendered.numberOfChannels;c++){const d=rendered.getChannelData(c);for(let i=0;i<d.length;i++)d[i]*=gain;}
  return {blob:encodeWav24(rendered),key:key.name,bpm};
 }
 $("generateButton").addEventListener("click",async()=>{
