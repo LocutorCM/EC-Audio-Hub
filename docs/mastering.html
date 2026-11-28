@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#090a12">
+<meta name="description" content="EC AI Mastering — masterización automática de audio con procesamiento adaptativo EC Audio.">
+<title>EC AI Mastering — EC Audio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:dark;--bg:#090a12;--surface:#11131e;--surface2:#171a28;--line:#292d40;--text:#f5f6fb;--muted:#969caf;--lime:#c7ff5e;--violet:#a58bff;--cyan:#73e5ef}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Manrope,system-ui,sans-serif}a{color:inherit;text-decoration:none}.wrap{width:min(1060px,calc(100% - 40px));margin:auto}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at 80% 0%,#a58bff1b,transparent 38%),radial-gradient(ellipse at 15% 20%,#c7ff5e0d,transparent 32%);z-index:-1}
+header{height:78px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #ffffff12}.brand{display:flex;align-items:center;gap:11px;font-size:13px;font-weight:800;letter-spacing:.18em}.logo{width:37px;height:37px;border-radius:11px;display:grid;place-items:center;background:var(--lime);color:#11150a;font-weight:900}.back{font-size:11px;color:#b7bbca}.back:hover{color:var(--lime)}
+main{padding:64px 0 90px}.eyebrow{color:var(--lime);font:10px "DM Mono",monospace;letter-spacing:.2em;text-transform:uppercase}.hero{text-align:center;margin-bottom:38px}.hero h1{font-size:clamp(38px,7vw,66px);letter-spacing:-.075em;line-height:1;margin:16px 0}.hero h1 span{color:var(--lime)}.hero p{max-width:610px;margin:0 auto;color:#a9aec0;font-size:13px;line-height:1.9}
+.workspace{display:grid;grid-template-columns:1.05fr .95fr;gap:16px;align-items:start}.panel{border:1px solid var(--line);border-radius:17px;background:linear-gradient(145deg,#171a28,#10121c);padding:25px;box-shadow:0 25px 70px #0004}.panel h2{font-size:17px;margin:0 0 7px;letter-spacing:-.03em}.muted{color:var(--muted);font-size:11px;line-height:1.8;margin:0 0 20px}
+.drop{border:1px dashed #596044;border-radius:14px;background:#c7ff5e08;padding:28px 17px;text-align:center;transition:.2s;cursor:pointer}.drop.drag{border-color:var(--lime);background:#c7ff5e14}.upload-icon{width:48px;height:48px;border-radius:15px;margin:0 auto 13px;display:grid;place-items:center;background:#c7ff5e15;color:var(--lime);font-size:22px}.drop strong{display:block;font-size:13px}.drop span{display:block;color:#858ca1;font-size:10px;margin-top:8px}.drop input{display:none}
+.fileline{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--line);border-radius:10px;margin-top:12px;background:#0b0d16}.fileicon{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:#a58bff18;color:var(--violet)}.filemeta{min-width:0;flex:1}.filemeta b{display:block;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.filemeta small{color:var(--muted);font-size:9px}.remove{border:0;background:transparent;color:#969caf;font-size:17px;cursor:pointer}
+label{display:block;font-size:10px;font-weight:800;color:#c8ccda;margin:20px 0 8px}select{width:100%;padding:13px 14px;border:1px solid #34384e;border-radius:10px;background:#0b0d16;color:#f5f6fb;font:12px Manrope,sans-serif;outline:none}select:focus{border-color:var(--lime)}
+.formrow{display:grid;grid-template-columns:1fr 1fr;gap:12px}.primary{width:100%;border:0;border-radius:10px;background:var(--lime);color:#11150a;font:800 12px Manrope,sans-serif;padding:15px;margin-top:22px;cursor:pointer;transition:.2s}.primary:hover{transform:translateY(-2px);box-shadow:0 10px 28px #c7ff5e26}.primary:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+.note{font-size:10px;line-height:1.7;color:#7f879b;margin:13px 0 0;text-align:center}.status{display:none;margin-top:16px;padding:13px;border:1px solid #34384e;border-radius:10px;background:#0b0d16}.status.show{display:block}.statushead{display:flex;justify-content:space-between;gap:12px;font-size:10px}.statushead b{color:var(--lime)}.progress{height:5px;background:#292d40;border-radius:8px;margin-top:11px;overflow:hidden}.progress i{display:block;height:100%;width:0;background:var(--lime);transition:width .2s}
+.result{display:none}.result.show{display:block}.result audio{width:100%;height:40px;margin-top:8px}.resulthead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}.resulthead b{font-size:12px}.success{color:var(--lime);font:10px "DM Mono",monospace}.metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin:16px 0}.metric{padding:12px;border:1px solid var(--line);border-radius:10px;background:#0b0d16}.metric small{display:block;color:#858ca1;font:9px "DM Mono",monospace}.metric b{display:block;font-size:17px;margin-top:6px}.download{display:flex;align-items:center;justify-content:center;width:100%;padding:13px;border:1px solid #c7ff5e66;border-radius:10px;color:var(--lime);font-size:11px;font-weight:800;margin-top:12px}.download:hover{background:#c7ff5e12}
+.tips{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:17px}.tip{border:1px solid var(--line);border-radius:12px;padding:14px;background:#11131e}.tip b{font-size:10px;display:block;margin-bottom:6px}.tip span{font-size:9px;line-height:1.7;color:var(--muted)}
+.error{display:none;margin-top:13px;padding:12px;border:1px solid #743f4b;border-radius:10px;background:#391c261a;color:#ffabb7;font-size:10px;line-height:1.6}.error.show{display:block}
+footer{border-top:1px solid #ffffff12;padding:24px 0;color:#777e91;font-size:9px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+@media(max-width:760px){.workspace{grid-template-columns:1fr}.tips{grid-template-columns:1fr}.panel{padding:20px}main{padding:48px 0 70px}}@media(max-width:480px){.wrap{width:calc(100% - 28px)}.formrow{grid-template-columns:1fr}.hero h1{font-size:43px}}
+</style></head>
+<body>
+<header class="wrap"><a class="brand" href="./"><span class="logo">EC</span><span>EC AUDIO</span></a><a class="back" href="./">← Volver a EC Audio</a></header>
+<main class="wrap">
+<div class="hero"><div class="eyebrow">EC AUDIO / INTELLIGENT AUDIO WORKFLOW</div><h1>EC AI <span>MASTERING</span></h1><p>Tu canción entra. Un proceso de análisis y masterización adaptativa trabaja el balance tonal, la dinámica y el nivel final. Sin tener que configurar una cadena de plugins.</p></div>
+<div class="workspace">
+<section class="panel">
+<h2>01 / Tu canción</h2><p class="muted">Sube el archivo original de tu mezcla. Disponible desde teléfono, tablet o computadora.</p>
+<label class="drop" id="dropzone" for="audioFile"><div class="upload-icon">↑</div><strong>Selecciona o arrastra tu canción</strong><span>WAV · MP3 · FLAC · AIFF · M4A · AAC · OGG · OPUS · Máx. 150 MB</span><input id="audioFile" type="file" accept=".wav,.wave,.mp3,.flac,.aif,.aiff,.m4a,.aac,.ogg,.opus,audio/*"></label>
+<div class="fileline" id="fileLine" hidden><div class="fileicon">♫</div><div class="filemeta"><b id="fileName"></b><small id="fileSize"></small></div><button class="remove" id="removeFile" type="button" aria-label="Quitar archivo">×</button></div>
+<audio id="originalPlayer" controls hidden style="width:100%;height:38px;margin-top:12px"></audio>
+<div class="formrow"><div><label for="genre">Género musical</label><select id="genre"><option value="auto">Automático / equilibrado</option><option value="urban">Urbano / reggaetón</option><option value="rap">Rap / hip-hop</option><option value="pop">Pop</option><option value="rock">Rock</option><option value="worship">Adoración / música cristiana</option><option value="ballad">Balada</option><option value="electronic">Electrónica</option><option value="acoustic">Acústica</option></select></div><div><label for="format">Formato de salida</label><select id="format"><option value="wav">WAV · 24-bit / 48 kHz</option><option value="mp3">MP3 · 320 kbps</option></select></div></div>
+<button class="primary" id="masterButton" type="button" disabled>✦ MASTERIZAR MI CANCIÓN</button>
+<p class="note">Necesitas iniciar sesión con tu cuenta EC Audio. Tus archivos se procesan temporalmente y se eliminan al terminar.</p>
+<div class="status" id="status"><div class="statushead"><span id="statusText">Preparando audio…</span><b id="statusPercent">0%</b></div><div class="progress"><i id="progressBar"></i></div></div>
+<div class="error" id="errorBox" role="alert"></div>
+</section>
+<section class="panel">
+<div class="resulthead"><div><h2>02 / Resultado</h2><p class="muted" style="margin:5px 0 0">Tu master final, listo para descargar.</p></div><span class="success" id="resultState">ESPERANDO AUDIO</span></div>
+<div class="result" id="result">
+<div class="metric"><small>PERFIL APLICADO</small><b id="profileValue" style="font-size:13px">—</b></div>
+<audio id="masteredPlayer" controls></audio>
+<div class="metrics"><div class="metric"><small>OBJETIVO DE LOUDNESS</small><b id="lufsValue">—</b></div><div class="metric"><small>PEAK DE ENTRADA</small><b id="peakValue">—</b></div></div>
+<a class="download" id="downloadLink" href="#" download>↓ DESCARGAR MASTER</a>
+</div>
+<div id="emptyResult" style="border:1px dashed #34384e;border-radius:13px;padding:35px 18px;text-align:center;color:#777f94"><div style="font-size:30px;margin-bottom:12px">◉</div><b style="display:block;color:#c8ccda;font-size:12px">Tu master aparecerá aquí</b><span style="font-size:10px;line-height:1.8;display:block;margin-top:8px">Sube tu canción y pulsa masterizar para comenzar.</span></div>
+</section>
+</div>
+<div class="tips"><div class="tip"><b>ANÁLISIS DE AUDIO</b><span>Lectura de nivel, pico y características técnicas antes del procesamiento.</span></div><div class="tip"><b>PROCESAMIENTO ADAPTATIVO</b><span>Ecualización tonal, control dinámico, limitación y normalización de loudness.</span></div><div class="tip"><b>EXPORTACIÓN</b><span>WAV PCM de 24 bits o MP3 de 320 kbps, con conversión a 48 kHz.</span></div></div>
+</main>
+<footer class="wrap"><span>EC AUDIO · SHAPE YOUR SOUND</span><span>Los resultados dependen de la calidad de la mezcla original.</span></footer>
+<script type="module" src="./js/mastering.js"></script>
+</body></html>
