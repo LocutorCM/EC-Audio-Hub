@@ -16,7 +16,11 @@ struct HubView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ZStack {\n                if let artwork = studioArtwork {\n                    Image(nsImage: artwork).resizable().scaledToFill().overlay(Color.black.opacity(0.48))\n                }\n                HStack(spacing: 12) {
+            ZStack {
+                if let artwork = studioArtwork {
+                    Image(nsImage: artwork).resizable().scaledToFill().overlay(Color.black.opacity(0.48))
+                }
+                HStack(spacing: 12) {
                 Image(systemName: "waveform").font(.system(size: 24, weight: .bold)).foregroundColor(bg)
                     .frame(width: 46, height: 46).background(LinearGradient(colors: [lime, violet], startPoint: .topLeading, endPoint: .bottomTrailing)).cornerRadius(14)
                 VStack(alignment: .leading, spacing: 3) {
@@ -28,7 +32,9 @@ struct HubView: View {
                     Label("GITHUB CONECTADO", systemImage: "checkmark.circle.fill").font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundColor(.green)
                     Button("Desconectar") { uploader.logout() }.buttonStyle(.plain).foregroundColor(.secondary)
                 }
-                }.padding(24)\n            }.frame(height: 94).clipped()\n            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
+                }.padding(24)
+            }.frame(height: 94).clipped()
+            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
             if uploader.isAuthenticated { publisher } else { connection }
             HStack {
                 Text("EC AUDIO • ADMINISTRADOR PRIVADO")
