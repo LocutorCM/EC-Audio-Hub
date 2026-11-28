@@ -39,7 +39,7 @@ La web incluye un área de masterización local en el navegador con perfiles DSP
 
 ## EC AI Instrumental Creator
 
-La web usa ACE-Step 1.5 y Demucs mediante un espacio de Hugging Face conectado al backend EC Audio. Incluye sesión Firebase, consentimiento antes de enviar la voz, progreso por etapas, descarga de la mezcla completa y ZIP de pistas separadas. GitHub Actions despliega el motor desde `cloud/music-space/`; Render conserva las credenciales privadas `HF_TOKEN` y `HF_MUSIC_SPACE`. Consulta `docs/AI-INSTRUMENTAL-SETUP.md` para activar el espacio y revisar los límites de ZeroGPU gratuito. La separación devuelve las pistas que el modelo logra aislar; no garantiza una pista individual para cada instrumento ni informa progreso interno por instrumento.
+La página de EC Audio incorpora el generador público ACE-Step 1.5 de Hugging Face dentro de la sección Instrumental, sin claves, tokens ni configuración propia. Permite usar las funciones de generación, conversión de voz a acompañamiento y separación de pistas que estén habilitadas en el Space público. El procesamiento y la descarga ocurren en Hugging Face y dependen de sus límites y disponibilidad. Consulta `docs/AI-INSTRUMENTAL-SETUP.md`.
 
 ## Compilar apps macOS
 
