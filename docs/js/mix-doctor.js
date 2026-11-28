@@ -2,17 +2,22 @@
 // No descarga audio ni llama a servicios externos.
 export async function analyzeAndRecommend(input){
   const rate=input.sampleRate,frames=input.length;
-  const mono=new AudioBuffer({length:frames,numberOfChannels:1,sampleRate:rate});
+  // Analiza un fragmento central de hasta 8 s para mantener bajo el consumo de memoria
+  // incluso en teléfonos y mezclas largas.
+  const analysisFrames=Math.min(frames,Math.max(1,Math.floor(rate*8)));
+  const start=Math.max(0,Math.floor((frames-analysisFrames)/2));
+  const mono=new AudioBuffer({length:analysisFrames,numberOfChannels:1,sampleRate:rate});
   const out=mono.getChannelData(0);
   const left=input.getChannelData(0),right=input.numberOfChannels>1?input.getChannelData(1):left;
   let peak=0,sum=0,clip=0,corrXY=0,corrXX=0,corrYY=0;
   const stride=Math.max(1,Math.floor(frames/120000));
   for(let i=0;i<frames;i++){
-    const x=left[i],y=right[i],m=(x+y)*.5;
-    out[i]=m;peak=Math.max(peak,Math.abs(x),Math.abs(y));sum+=(x*x+y*y)*.5;
+    const x=left[i],y=right[i];
+    peak=Math.max(peak,Math.abs(x),Math.abs(y));sum+=(x*x+y*y)*.5;
     if(Math.abs(x)>=.999||Math.abs(y)>=.999)clip++;
     if(i%stride===0){corrXY+=x*y;corrXX+=x*x;corrYY+=y*y;}
   }
+  for(let i=0;i<analysisFrames;i++){const x=left[start+i],y=right[start+i];out[i]=(x+y)*.5;}
   const rms=Math.sqrt(sum/frames),crest=20*Math.log10(Math.max(peak,1e-9)/Math.max(rms,1e-9));
   const correlation=input.numberOfChannels>1?corrXY/Math.sqrt(Math.max(corrXX*corrYY,1e-12)):1;
   const ctx=new OfflineAudioContext(3,frames,rate),src=ctx.createBufferSource();src.buffer=mono;
