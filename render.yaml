@@ -45,3 +45,5 @@ services:
         value: "2"
       - key: MAX_UPLOAD_GB
         value: "2"
+      - key: MASTERING_MAX_UPLOAD_MB
+        value: "150"
