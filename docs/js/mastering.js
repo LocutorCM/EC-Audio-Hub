@@ -5,6 +5,11 @@ const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const $ = (id) => document.getElementById(id);
 let selectedFile = null, originalURL = null, masteredURL = null, busy = false, signedInUser = null;
+["compRatio","stereoWidth","eqLow","eqHigh"].forEach(id=>$(id).addEventListener("input",()=>{
+ const v=$(id).value;
+ const target={compRatio:"ratioValue",stereoWidth:"widthValue",eqLow:"lowValue",eqHigh:"highValue"}[id];
+ $(target).textContent=id==="compRatio"?Number(v).toFixed(1)+":1":id==="stereoWidth"?v+"%":Number(v).toFixed(1)+" dB";
+}));
 const profiles = {
   auto: {name:"Adaptativo EC", target:-14, hp:28, low:0, body:0, presence:0.5, air:0.5, threshold:-20, ratio:2.3},
   urban:{name:"Urbano / Reggaetón",target:-10.5,hp:30,low:0.8,body:0.2,presence:0.4,air:0.8,threshold:-19,ratio:2.8},
@@ -51,6 +56,12 @@ function encodeWav24(buffer){
   for(let i=0;i<frames;i++)for(let c=0;c<channels;c++){let s=Math.max(-1,Math.min(1,source[c][i]));let n=Math.round(s<0?s*8388608:s*8388607);view.setUint8(offset,n&255);view.setUint8(offset+1,(n>>8)&255);view.setUint8(offset+2,(n>>16)&255);offset+=3;}
   return new Blob([out],{type:"audio/wav"});
 }
+function applyStereoWidth(buffer,width){
+  if(buffer.numberOfChannels<2||Math.abs(width-1)<0.001)return buffer;
+  const left=buffer.getChannelData(0),right=buffer.getChannelData(1);
+  for(let i=0;i<left.length;i++){const mid=(left[i]+right[i])*0.5;const side=(left[i]-right[i])*0.5*width;left[i]=mid+side;right[i]=mid-side;}
+  return buffer;
+}
 async function renderMaster(input,profile,onProgress){
   const rate=48000,channels=Math.min(2,input.numberOfChannels),frames=Math.ceil(input.duration*rate);
   if(!Number.isFinite(frames)||frames<1||frames>rate*600)throw new Error("La canción supera el límite de 10 minutos para el procesamiento local.");
@@ -65,7 +76,9 @@ async function renderMaster(input,profile,onProgress){
   if(profile.body)connectFilter("peaking",260,profile.body,0.85);
   if(profile.presence)connectFilter("peaking",3200,profile.presence,0.9);
   if(profile.air)connectFilter("highshelf",10500,profile.air,0.7);
-  const compressor=offline.createDynamicsCompressor();compressor.threshold.value=profile.threshold;compressor.knee.value=12;compressor.ratio.value=profile.ratio;compressor.attack.value=0.012;compressor.release.value=0.18;node.connect(compressor);node=compressor;
+  const lowUser=offline.createBiquadFilter();lowUser.type="lowshelf";lowUser.frequency.value=120;lowUser.gain.value=Number($("eqLow").value)||0;node.connect(lowUser);node=lowUser;
+  const highUser=offline.createBiquadFilter();highUser.type="highshelf";highUser.frequency.value=9000;highUser.gain.value=Number($("eqHigh").value)||0;node.connect(highUser);node=highUser;
+  const compressor=offline.createDynamicsCompressor();compressor.threshold.value=profile.threshold;compressor.knee.value=12;compressor.ratio.value=Number($("compRatio").value)||profile.ratio;compressor.attack.value=0.012;compressor.release.value=0.18;node.connect(compressor);node=compressor;
   const limiter=offline.createDynamicsCompressor();limiter.threshold.value=-3;limiter.knee.value=0;limiter.ratio.value=16;limiter.attack.value=0.002;limiter.release.value=0.08;node.connect(limiter);node=limiter;
   const gain=offline.createGain();gain.gain.value=1;node.connect(gain);gain.connect(offline.destination);source.start(0);
   onProgress(32,"Aplicando ecualización y control dinámico…");
@@ -74,7 +87,10 @@ async function renderMaster(input,profile,onProgress){
   let multiplier=s.rms>0?targetRms/s.rms:1;multiplier=Math.min(multiplier,Math.pow(10,12/20));
   const ceiling=Math.pow(10,-1/20);if(s.peak*multiplier>ceiling)multiplier=ceiling/Math.max(s.peak,1e-9);
   const normalized=new OfflineAudioContext(channels,rendered.length,rate);const src=normalized.createBufferSource();src.buffer=rendered;const g=normalized.createGain();g.gain.value=multiplier;src.connect(g);g.connect(normalized.destination);src.start(0);
-  const finalBuffer=await normalized.startRendering();onProgress(92,"Preparando WAV de 24 bits…");
+  const normalizedBuffer=await normalized.startRendering();
+  onProgress(88,"Ajustando imagen estéreo…");
+  const finalBuffer=applyStereoWidth(normalizedBuffer,Number($("stereoWidth").value)/100);
+  onProgress(94,"Preparando WAV de 24 bits…");
   const finalStats=stats(finalBuffer);
   return {blob:encodeWav24(finalBuffer),inputPeak:db(stats(input).peak),outputPeak:db(finalStats.peak),profile:profile.name,target:profile.target};
 }
