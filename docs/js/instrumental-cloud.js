@@ -34,7 +34,7 @@ async function checkOnline() {
     if (response.status === 403) throw new Error(data.error || "Tu cuenta no está autorizada.");
     if (!response.ok) throw new Error(data.error || "No se pudo verificar el motor online.");
     onlineAvailable = data.available === true;
-    message(onlineAvailable ? "Acceso autorizado · ACE-Step online disponible · máximo 3 generaciones por hora." : (data.message || "El motor online no está disponible en este momento."));
+    message(onlineAvailable ? (data.providerReady === false ? "Acceso autorizado · " + (data.message || "El motor puede estar iniciando.") : "Acceso autorizado · ACE-Step online disponible · máximo 3 generaciones por hora.") : (data.message || "El motor online no está disponible en este momento."));
   } catch (err) { onlineAvailable = false; message(err.message || "No se pudo conectar con EC Audio Cloud."); }
   updateButton();
 }
