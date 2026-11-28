@@ -244,38 +244,9 @@ function installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret, loginLimit
     return res.json({ subscription: subscriptionFor(req.customer.id) });
   });
 
-  // Free demo activation: no payment is collected. Duration is controlled only by the server.
-  app.post('/api/customer/subscription/activate', customerAuth, async (req, res) => {
-    const existing = db.prepare('SELECT id FROM customer_subscriptions WHERE customer_id=?').get(req.customer.id);
-    if (existing) return res.status(409).json({ error: 'Esta cuenta ya tiene una prueba o licencia registrada.' });
-
-    // Check the original Firestore trial before allowing a legacy API trial.
-    if (req.firebaseIdentity && req.firebaseIdToken) {
-      try {
-        const url = 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(firebaseProjectId) +
-          '/databases/(default)/documents/ecAudioSubscriptions/' + encodeURIComponent(req.firebaseIdentity.uid);
-        const response = await fetch(url, {
-          headers: { Authorization: 'Bearer ' + req.firebaseIdToken },
-          signal: AbortSignal.timeout(10000)
-        });
-        if (response.ok) return res.status(409).json({ error: 'La prueba gratuita de esta cuenta ya fue utilizada.' });
-        if (response.status !== 404) return res.status(503).json({ error: 'No se pudo comprobar el historial de prueba en Firebase.' });
-      } catch {
-        return res.status(503).json({ error: 'No se pudo comprobar el historial de prueba en Firebase.' });
-      }
-    }
-
-    const now = new Date();
-    const startedAt = now.toISOString();
-    const expiresAt = new Date(now.getTime() + 60 * 1000).toISOString();
-    db.prepare(`
-      INSERT INTO customer_subscriptions(id,customer_id,status,plan,started_at,expires_at,updated_at)
-      VALUES(?,?,'active','trial',?,?,?)
-    `).run(crypto.randomUUID(), req.customer.id, startedAt, expiresAt, startedAt);
-    return res.status(200).json({
-      message: 'Acceso de prueba activado por 60 segundos. No se realizó ningún cobro.',
-      subscription: subscriptionFor(req.customer.id)
-    });
+  // Free trials are temporarily disabled. Existing paid licenses remain readable.
+  app.post('/api/customer/subscription/activate', customerAuth, (req, res) => {
+    return res.status(410).json({ error: 'Las pruebas gratuitas están desactivadas temporalmente.' });
   });
 
   // Ko-fi membership payments are activated only from verified webhook events.
