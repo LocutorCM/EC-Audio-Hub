@@ -42,7 +42,7 @@ const NOTES=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 function estimateKey(buffer){
  const mono=buffer.getChannelData(0),sr=buffer.sampleRate,step=Math.max(1,Math.floor(sr/11025)),rate=sr/step;
  const hist=Array(12).fill(0),frame=Math.floor(rate*.075),hop=Math.floor(rate*.12);
- for(let start=0;start+frame<mono.length;start+=hop){
+ const analysisEnd=Math.min(mono.length,Math.floor(sr*60));\n for(let start=0;start+frame<analysisEnd;start+=hop){
   let energy=0;for(let i=0;i<frame;i+=3)energy+=mono[start*step+i*step]**2;
   if(energy/frame<0.000002)continue;
   let bestLag=0,best=-1;const min=Math.floor(rate/700),max=Math.min(Math.floor(rate/75),Math.floor(frame/2));
@@ -72,15 +72,15 @@ function addNoise(ctx,t,duration,level,highpass=5000){
 function addChord(ctx,t,dur,root,quality,style){
  const intervals=quality==="minor"?[0,3,7]:[0,4,7];
  const pad=["worship","ballad","cinematic","acoustic"].includes(style);
- intervals.forEach((iv,i)=>{const note=root+iv+ (pad?0:12);addTone(ctx,t,dur,midiHz(note),"sawtooth",pad?.035:.022,i===0?-.22:.22,i===1?4:0);});
+ intervals.forEach((iv,i)=>{const note=root+iv+ (pad?0:12);addTone(ctx,t,dur,midiHz(note),pianoLike?"triangle":(pad?"sawtooth":"triangle"),pad?.035:.022,i===0?-.22:.22,i===1?4:0);});
  if(pad)addTone(ctx,t,dur,midiHz(root+12),"triangle",.018,0,-5);
 }
-async function buildArrangement(input,style,tempoMode,onProgress){
+async function buildArrangement(input,style,tempoMode,mood,notes,onProgress){
  const rate=44100,channels=2,duration=Math.min(input.duration,300),frames=Math.ceil(duration*rate);
  if(!frames||duration>300)throw new Error("La grabación debe durar 5 minutos o menos para generar el acompañamiento local.");
  const AudioCtx=window.OfflineAudioContext||window.webkitOfflineAudioContext;
  if(!AudioCtx)throw new Error("Este navegador no admite síntesis de audio local. Actualiza Chrome o Safari.");
- const key=estimateKey(input),scale=style==="ballad"||style==="worship"||style==="cinematic"?scales.major:scales.minor;
+ const key=estimateKey(input),moodText=(mood||"").toLowerCase(),minorMood=/triste|oscura|oscuro|melanc|dram[aá]tic|nost[aá]lgic/.test(moodText),majorMood=/feliz|alegre|esperan|luminos|victor|triunf/.test(moodText),scale=minorMood?scales.minor:majorMood?scales.major:(style==="ballad"||style==="worship"||style==="cinematic"?scales.major:scales.minor),notesText=(notes||"").toLowerCase(),noDrums=/sin bater[ií]a|no drums|sin percusi[oó]n/.test(notesText),pianoLike=/piano|teclas/.test(notesText);
  const bpm=tempoMode==="slow"?76:tempoMode==="medium"?100:tempoMode==="fast"?124:96;
  const beat=60/bpm,bar=beat*4,ctx=new AudioCtx(channels,frames,rate);
  const master=ctx.createGain();master.gain.value=.72;
@@ -102,7 +102,7 @@ async function buildArrangement(input,style,tempoMode,onProgress){
    if(q===0||q===2)addKick(ctx,bt,style==="trap"?.85:.65);
    if(q===1||q===3)addNoise(ctx,bt,.13,style==="rock"?.25:.16,1800);
    if(["urban","rap","trap","pop","rock","rnb"].includes(style)){
-    if(q===0||q===2)addNoise(ctx,bt+beat*.5,.055,.07,7000);
+    if(!noDrums&&(q===0||q===2))addNoise(ctx,bt+beat*.5,.055,.07,7000);
    }
   }
   if(["worship","ballad","acoustic","cinematic"].includes(style)){
@@ -139,7 +139,7 @@ $("generateButton").addEventListener("click",async()=>{
   if(decoded.duration>300)throw new Error("La grabación supera el límite de 5 minutos para este generador local.");
   if(decoded.numberOfChannels>2)throw new Error("Usa una grabación mono o estéreo.");
   setProgress(14,"Analizando tonalidad aproximada…");
-  const result=await buildArrangement(decoded,$("style").value,$("tempo").value,setProgress);
+  const result=await buildArrangement(decoded,$("style").value,$("tempo").value,$("mood").value,$("notes").value,setProgress);
   if(outputUrl)URL.revokeObjectURL(outputUrl);outputUrl=URL.createObjectURL(result.blob);
   $("resultPlayer").src=outputUrl;$("resultPlayer").hidden=false;$("downloadLink").href=outputUrl;$("downloadLink").download=(file.name.replace(/\.[^.]+$/,"")||"EC-Audio")+"-Instrumental-"+result.key+"-"+result.bpm+"BPM.wav";$("downloadLink").classList.add("show");
   $("resultTitle").textContent="¡Tu instrumental está lista!";$("resultText").textContent="Tonalidad estimada: "+result.key+" · Tempo: "+result.bpm+" BPM · WAV estéreo 24 bits / 44.1 kHz.";
