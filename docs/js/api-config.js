@@ -1,4 +1,3 @@
-// Configuración pública del API de EC Audio.
-// Se establece cuando el servidor Express esté publicado con HTTPS.
-// Ejemplo: https://api.tudominio.com (sin barra final).
-export const API_BASE_URL = "";
+// API HTTPS del servicio EC Audio Cloud desplegado desde render.yaml.
+// Si Render asigna otro dominio, actualiza esta URL con el dominio mostrado en el Dashboard.
+export const API_BASE_URL = "https://ec-audio-cloud.onrender.com";
