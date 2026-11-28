@@ -36,3 +36,10 @@ Si el navegador bloquea la conexión por CORS o por políticas de red local, deb
 - Inferencia y modelos: https://github.com/ace-step/ACE-Step-1.5/blob/main/docs/en/INFERENCE.md
 
 ACE-Step y sus modelos tienen sus propias licencias, requisitos y dependencias; revísalos antes de uso comercial.
+
+ 
+## Instaladores EC Audio
+
+- macOS Apple Silicon / Linux: [install-and-run.sh](https://github.com/LocutorCM/EC-Audio-Hub/blob/main/tools/ec-ai-engine/install-and-run.sh)
+- Windows: [install-and-run.ps1](https://github.com/LocutorCM/EC-Audio-Hub/blob/main/tools/ec-ai-engine/install-and-run.ps1)
+- Guía del motor local: [EC AI Engine](https://github.com/LocutorCM/EC-Audio-Hub/tree/main/tools/ec-ai-engine)
