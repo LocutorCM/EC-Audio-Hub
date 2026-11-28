@@ -13,6 +13,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Database = require('better-sqlite3');
 const { installCustomerAccountApi } = require('./customer-accounts');
+const { installMasteringApi } = require('./audio-mastering');
 
 const PORT = Number(process.env.PORT || 8080);
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, '..', 'data'));
@@ -97,7 +98,8 @@ app.use((req, res, next) => {
   return next();
 });
 
-installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret: JWT_SECRET, firebaseApiKey: FIREBASE_API_KEY, firebaseProjectId: FIREBASE_PROJECT_ID, customerWebURL: CUSTOMER_WEB_URL, maxActiveDevices: MAX_ACTIVE_DEVICES, loginLimiter: rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, standardHeaders: 'draft-7', legacyHeaders: false }) });
+const customerApi = installCustomerAccountApi(app, { db, jwt, bcrypt, jwtSecret: JWT_SECRET, firebaseApiKey: FIREBASE_API_KEY, firebaseProjectId: FIREBASE_PROJECT_ID, customerWebURL: CUSTOMER_WEB_URL, maxActiveDevices: MAX_ACTIVE_DEVICES, loginLimiter: rateLimit({ windowMs: 15 * 60 * 1000, limit: 12, standardHeaders: 'draft-7', legacyHeaders: false }) });
+installMasteringApi(app, customerApi);
 
 app.get('/health', (_req, res) => res.json({ ok: true, service: 'EC Audio Cloud API', customerAccounts: true, firebaseConfigured: Boolean(FIREBASE_API_KEY && FIREBASE_PROJECT_ID), kofiConfigured: Boolean(KOFI_VERIFICATION_TOKEN && KOFI_MONTHLY_TIER_NAME), kofiPageURL: KOFI_PAGE_URL, demoTrialSeconds: 60 }));
 
