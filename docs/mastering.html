@@ -53,6 +53,17 @@ footer{border-top:1px solid #ffffff12;padding:24px 0;color:#777e91;font-size:9px
 <div class="result" id="result">
 <div class="metric"><small>PERFIL APLICADO</small><b id="profileValue" style="font-size:13px">—</b></div>
 <audio id="masteredPlayer" controls></audio>
+<div id="finishControls" style="margin-top:18px;padding:16px;border:1px solid #34384e;border-radius:13px;background:#0b0d16">
+ <div style="font:10px 'DM Mono',monospace;letter-spacing:.12em;color:var(--lime);margin-bottom:7px">03 / AJUSTE FINAL · DESPUÉS DEL AUTO MASTER</div>
+ <p style="font-size:10px;line-height:1.7;color:var(--muted);margin:0 0 13px">Personaliza el carácter de tu master automático. Los cambios se aplican sobre el resultado, no sobre el archivo original.</p>
+ <div style="display:grid;gap:14px">
+  <div><div style="display:flex;justify-content:space-between;gap:10px"><label for="widthControl" style="margin:0">Amplitud estéreo</label><b id="widthValue" style="font:11px 'DM Mono',monospace;color:var(--lime)">100%</b></div><input id="widthControl" type="range" min="0" max="150" step="1" value="100" style="width:100%;accent-color:var(--lime)"><small style="color:#858ca1;font-size:9px">0% mono · 100% original · 150% más ancho</small></div>
+  <div><div style="display:flex;justify-content:space-between"><label for="bassControl" style="margin:0">Bajos</label><b id="bassValue" style="font:11px 'DM Mono',monospace;color:var(--lime)">0.0 dB</b></div><input id="bassControl" type="range" min="-4" max="4" step=".1" value="0" style="width:100%;accent-color:var(--lime)"></div>
+  <div><div style="display:flex;justify-content:space-between"><label for="midControl" style="margin:0">Medios</label><b id="midValue" style="font:11px 'DM Mono',monospace;color:var(--lime)">0.0 dB</b></div><input id="midControl" type="range" min="-4" max="4" step=".1" value="0" style="width:100%;accent-color:var(--lime)"></div>
+  <div><div style="display:flex;justify-content:space-between"><label for="highControl" style="margin:0">Altos</label><b id="highValue" style="font:11px 'DM Mono',monospace;color:var(--lime)">0.0 dB</b></div><input id="highControl" type="range" min="-4" max="4" step=".1" value="0" style="width:100%;accent-color:var(--lime)"></div>
+ </div>
+ <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:15px"><button id="applyFinish" type="button" class="primary" style="margin:0;padding:12px">APLICAR AJUSTES</button><button id="resetFinish" type="button" style="border:1px solid #34384e;border-radius:10px;background:#171a28;color:#f5f6fb;font:700 10px Manrope,sans-serif;padding:12px;cursor:pointer">RESTABLECER AUTO</button></div>
+</div>
 <div class="metrics"><div class="metric"><small>OBJETIVO RMS APROX.</small><b id="lufsValue">—</b></div><div class="metric"><small>PEAK DE ENTRADA</small><b id="peakValue">—</b></div><div class="metric"><small>PEAK DE SALIDA</small><b id="outputPeakValue">—</b></div></div>
 <a class="download" id="downloadLink" href="#" download>↓ DESCARGAR MASTER</a>
 </div>
