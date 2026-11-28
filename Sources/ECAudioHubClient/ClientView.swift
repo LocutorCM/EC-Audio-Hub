@@ -209,7 +209,7 @@ struct ClientView: View {
     private var hero: some View {
         ZStack(alignment: .leading) {
             RoundedRectangle(cornerRadius: 18)
-                .fill(LinearGradient(colors: [Color(hex: 0x1A4C88), Color(hex: 0x17365D), Color(hex: 0x171A28)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .fill(LinearGradient(colors: [Color(hex: 0x27233A), Color(hex: 0x1B1E2E), Color(hex: 0x171A28)], startPoint: .topLeading, endPoint: .bottomTrailing))
             Circle().fill(cyan.opacity(0.12)).frame(width: 230, height: 230).blur(radius: 2).offset(x: 520, y: -55)
             Circle().stroke(Color.white.opacity(0.10), lineWidth: 1).frame(width: 190, height: 190).offset(x: 570, y: 22)
             HStack {
@@ -395,7 +395,7 @@ struct BlueButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 10, weight: .bold))
-            .foregroundColor(.white)
+            .foregroundColor(Color(hex: 0x11150A))
             .padding(.horizontal, 15).padding(.vertical, 9)
             .background(LinearGradient(colors: [Color(hex: 0xC7FF5E), Color(hex: 0x9EBE40)], startPoint: .topLeading, endPoint: .bottomTrailing))
             .cornerRadius(8)
