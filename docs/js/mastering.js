@@ -125,8 +125,8 @@ $("masterButton").addEventListener("click",async()=>{
     $("profileValue").textContent=result.profile;$("lufsValue").textContent=result.target+" dBFS RMS aprox.";$("peakValue").textContent=result.inputPeak+" dBFS";$("outputPeakValue").textContent=result.outputPeak+" dBFS";
     $("result").classList.add("show");$("emptyResult").hidden=true;$("resultState").textContent="MASTER COMPLETADA";$("resultState").style.color="var(--lime)";setProgress(100,"Master terminada");
   }catch(error){showError(error.message||"No se pudo masterizar esta canción.");$("resultState").textContent="ERROR";$("resultState").style.color="#ffabb7";}
-  finally{if(context)try{await context.close();}catch{}busy=false;$("masterButton").disabled=!selectedFile||!signedInUser;$("status").classList.remove("show");}
+  finally{if(context)try{await context.close();}catch{}busy=false;$("masterButton").disabled=!selectedFile;$("status").classList.remove("show");}
 });
 if(!window.AudioContext&&!window.webkitAudioContext){showError("Tu navegador no admite el procesamiento de audio. Actualiza Chrome o Safari para usar EC AI Mastering.");}
 
-onAuthStateChanged(auth,user=>{signedInUser=user;$("masterButton").disabled=!selectedFile||!signedInUser;$("masterButton").textContent=!user?"INICIA SESIÓN PARA MASTERIZAR":"✦ MASTERIZAR MI CANCIÓN";});
+onAuthStateChanged(auth,user=>{signedInUser=user;$("masterButton").disabled=!selectedFile||busy;$("masterButton").textContent=!user?"INICIA SESIÓN PARA MASTERIZAR":"✦ MASTERIZAR MI CANCIÓN";});
