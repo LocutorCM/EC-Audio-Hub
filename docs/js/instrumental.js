@@ -167,6 +167,30 @@ async function pollJob(jobId) {
   throw new Error("La generación sigue tardando más de lo esperado. Vuelve a consultar en unos minutos; no vuelvas a enviar la misma solicitud.");
 }
 
+$("downloadStems").addEventListener("click", async event => {
+  event.preventDefault();
+  if (!activeJobId || !signedInUser) return;
+  try {
+    const headers = await authHeaders();
+    const response = await fetch(API_BASE_URL + "/api/instrumental/jobs/" + encodeURIComponent(activeJobId) + "/stems", { headers });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error || "No se pudo descargar el ZIP de pistas.");
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "EC-AI-Stems.zip";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  } catch (error) {
+    showError(error.message || "No se pudo descargar el ZIP de pistas.");
+  }
+});
+
 $("generateButton").addEventListener("click", async () => {
   if (!selectedFile || !signedInUser || !apiAvailable || !$("consent").checked || busy) return;
   clearError();
