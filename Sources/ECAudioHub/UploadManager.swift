@@ -84,7 +84,10 @@ final class UploadManager: ObservableObject {
                 if batch.count < 100 { break }
                 page += 1
             }
-            releases = allReleases
+            releases = allReleases.filter { release in
+                let description = release.body ?? ""
+                return description.contains("EC_AUDIO_HUB_ADMIN_UPLOAD") || description.contains("EC_AUDIO_PLUGIN_RELEASE")
+            }
         } catch { errorMessage = error.localizedDescription }
     }
 
@@ -212,6 +215,7 @@ final class UploadManager: ObservableObject {
             let release = try await createRelease(owner: owner, repo: repo, token: token,
                 tag: tag, title: "\(name) · v\(releaseVersion)",
                 body: """
+                EC_AUDIO_HUB_ADMIN_UPLOAD
                 EC_AUDIO_PLUGIN_RELEASE
                 plugin_name: \(name)
                 version: \(releaseVersion)
@@ -371,6 +375,7 @@ struct AdminRelease: Decodable, Identifiable {
     let tagName: String
     let name: String?
     let assets: [AdminReleaseAsset]
-    enum CodingKeys: String, CodingKey { case id, name, assets; case tagName = "tag_name" }
+    let body: String?
+    enum CodingKeys: String, CodingKey { case id, name, assets, body; case tagName = "tag_name" }
 }
 struct AdminReleaseAsset: Decodable { let name: String }
