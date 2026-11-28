@@ -37,7 +37,7 @@ function estimateKey(buffer){
  const mono=buffer.getChannelData(0),sr=buffer.sampleRate,step=Math.max(1,Math.floor(sr/11025)),rate=sr/step;
  const hist=Array(12).fill(0),frame=Math.floor(rate*.075),hop=Math.floor(rate*.12);
  const analysisEnd=Math.min(mono.length,Math.floor(sr*60));
- for(let start=0,start+frame<analysisEnd;start+=hop){
+ for(let start=0;start+frame<analysisEnd;start+=hop){
   let energy=0;for(let i=0;i<frame;i+=3)energy+=mono[start*step+i*step]**2;
   if(energy/frame<0.000002)continue;
   let bestLag=0,best=-1;const min=Math.floor(rate/700),max=Math.min(Math.floor(rate/75),Math.floor(frame/2));
