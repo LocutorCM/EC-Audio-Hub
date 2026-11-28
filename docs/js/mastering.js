@@ -22,6 +22,57 @@ function showError(message){$("errorBox").textContent=message;$("errorBox").clas
 function clearError(){$("errorBox").textContent="";$("errorBox").classList.remove("show");}
 function setProgress(value,label){$("status").classList.add("show");$("statusText").textContent=label;$("statusPercent").textContent=Math.round(value)+"%";$("progressBar").style.width=value+"%";}
 function db(v){return v>0?20*Math.log10(v):-120;}
+function biquadCoeffs(type,frequency,Q,gainDb,rate){
+  const A=Math.pow(10,(gainDb||0)/40),w=2*Math.PI*frequency/rate,c=Math.cos(w),s=Math.sin(w),alpha=s/(2*(Q||.707));
+  let b0,b1,b2,a0,a1,a2;
+  if(type==="highpass"){b0=(1+c)/2;b1=-(1+c);b2=(1+c)/2;a0=1+alpha;a1=-2*c;a2=1-alpha;}
+  else{
+    const beta=2*Math.sqrt(A)*alpha;
+    b0=A*((A+1)+(A-1)*c+beta);b1=-2*A*((A-1)+(A+1)*c);b2=A*((A+1)+(A-1)*c-beta);
+    a0=(A+1)-(A-1)*c+beta;a1=2*((A-1)-(A+1)*c);a2=(A+1)-(A-1)*c-beta;
+  }
+  return [b0/a0,b1/a0,b2/a0,a1/a0,a2/a0];
+}
+function runBiquad(data,coeffs){
+  const [b0,b1,b2,a1,a2]=coeffs,out=new Float64Array(data.length);let x1=0,x2=0,y1=0,y2=0;
+  for(let i=0;i<data.length;i++){const x=data[i],y=b0*x+b1*x1+b2*x2-a1*y1-a2*y2;out[i]=y;x2=x1;x1=x;y2=y1;y1=y;}
+  return out;
+}
+function measureIntegratedLUFS(buffer){
+  const rate=buffer.sampleRate,n=buffer.length,channels=buffer.numberOfChannels;
+  if(!n)return -120;
+  const shelf=biquadCoeffs("shelf",1681,0.707,4,rate),hp=biquadCoeffs("highpass",38,0.5,0,rate);
+  const weighted=[];
+  for(let c=0;c<channels;c++){let data=Float64Array.from(buffer.getChannelData(c));data=runBiquad(data,shelf);data=runBiquad(data,hp);weighted.push(data);}
+  const block=Math.max(1,Math.round(rate*.4)),hop=Math.max(1,Math.round(rate*.1)),energies=[];
+  const weights=channels===1?[1]:Array.from({length:channels},()=>1);
+  for(let start=0;start+block<=n;start+=hop){
+    let energy=0;
+    for(let c=0;c<channels;c++){let sum=0,a=weighted[c];for(let i=start;i<start+block;i++)sum+=a[i]*a[i];energy+=weights[c]*sum/block;}
+    if(energy>0)energies.push(energy);
+  }
+  if(!energies.length)return -120;
+  const loud=e=>-.691+10*Math.log10(Math.max(e,1e-20)),mean=a=>a.reduce((s,x)=>s+x,0)/a.length;
+  const absolute=energies.filter(e=>loud(e)>-70);if(!absolute.length)return -120;
+  const relativeGate=loud(mean(absolute))-10,gated=absolute.filter(e=>loud(e)>relativeGate);
+  return gated.length?loud(mean(gated)):-120;
+}
+function measureTruePeak(buffer){
+  let peak=0;
+  for(let c=0;c<buffer.numberOfChannels;c++){
+    const a=buffer.getChannelData(c),n=a.length;
+    for(let i=0;i<n;i++){
+      const p0=a[Math.max(0,i-1)],p1=a[i],p2=a[Math.min(n-1,i+1)],p3=a[Math.min(n-1,i+2)];
+      peak=Math.max(peak,Math.abs(p1));
+      for(let k=1;k<4;k++){const t=k/4,t2=t*t,t3=t2*t;const y=.5*((2*p1)+(-p0+p2)*t+(2*p0-5*p1+4*p2-p3)*t2+(-p0+3*p1-3*p2+p3)*t3);peak=Math.max(peak,Math.abs(y));}
+    }
+  }
+  return db(peak);
+}
+async function applyGain(buffer,gainDb){
+  const ctx=new OfflineAudioContext(buffer.numberOfChannels,buffer.length,buffer.sampleRate),src=ctx.createBufferSource(),g=ctx.createGain();
+  src.buffer=buffer;g.gain.value=Math.pow(10,gainDb/20);src.connect(g);g.connect(ctx.destination);src.start(0);return ctx.startRendering();
+}
 function stats(buffer){
   let sum=0, count=0, peak=0;
   for(let c=0;c<buffer.numberOfChannels;c++){const a=buffer.getChannelData(c);for(let i=0;i<a.length;i++){const v=a[i];sum+=v*v;count++;peak=Math.max(peak,Math.abs(v));}}
@@ -84,15 +135,17 @@ async function renderMaster(input,profile,onProgress){
   onProgress(32,"Aplicando ecualización y control dinámico…");
   const rendered=await offline.startRendering();onProgress(76,"Midiendo nivel y preparando limitación final…");
   const stereoAdjusted=applyStereoWidth(rendered,profile.width ?? 1);
-  const s=stats(stereoAdjusted);const targetRms=Math.pow(10,profile.target/20);
-  let multiplier=s.rms>0?targetRms/s.rms:1;multiplier=Math.min(multiplier,Math.pow(10,12/20));
-  const ceiling=Math.pow(10,-1/20);if(s.peak*multiplier>ceiling)multiplier=ceiling/Math.max(s.peak,1e-9);
-  const normalized=new OfflineAudioContext(channels,rendered.length,rate);const src=normalized.createBufferSource();src.buffer=stereoAdjusted;const g=normalized.createGain();g.gain.value=multiplier;src.connect(g);g.connect(normalized.destination);src.start(0);
-  const normalizedBuffer=await normalized.startRendering();
-  onProgress(88,"Verificando pico de salida…");
-  onProgress(94,"Preparando WAV de 24 bits…");
-  const finalStats=stats(normalizedBuffer);
-  return {blob:encodeWav24(normalizedBuffer),buffer:normalizedBuffer,inputPeak:db(stats(input).peak),outputPeak:db(finalStats.peak),profile:profile.name,target:profile.target,analysis:profile.analysis};
+  const beforeLufs=measureIntegratedLUFS(stereoAdjusted);
+  const ceilingDb=Number($("truePeakTarget").value),ceiling=Math.pow(10,ceilingDb/20);
+  let gainDb=Number.isFinite(beforeLufs)?profile.target-beforeLufs:0;
+  gainDb=Math.max(-18,Math.min(18,gainDb));
+  const predictedTP=measureTruePeak(stereoAdjusted)+gainDb;
+  if(predictedTP>ceilingDb)gainDb-=predictedTP-ceilingDb;
+  onProgress(86,"Ajustando sonoridad integrada y True Peak…");
+  const normalizedBuffer=await applyGain(stereoAdjusted,gainDb);
+  onProgress(94,"Verificando LUFS y picos reales…");
+  const finalLufs=measureIntegratedLUFS(normalizedBuffer),finalTP=measureTruePeak(normalizedBuffer);
+  return {blob:encodeWav24(normalizedBuffer),buffer:normalizedBuffer,inputPeak:db(stats(input).peak),outputPeak:db(stats(normalizedBuffer).peak),inputLufs:measureIntegratedLUFS(input),outputLufs:finalLufs,truePeak:finalTP,profile:profile.name,target:profile.target,analysis:profile.analysis};
 }
 function updateFinishLabels(){
   $("widthValue").textContent=$("widthControl").value+"%";
@@ -154,6 +207,7 @@ $("masterButton").addEventListener("click",async()=>{
     showMixDoctor(analysis);
     const base=profiles[$("genre").value]||profiles.auto;
     const profile={...base};
+    profile.target=Number($("targetLufs").value);
     // The analysis drives the mastering decisions; genre is only a gentle tonal starting point.
     profile.low=Math.max(-2.5,Math.min(2.5,base.low+analysis.lowDb));
     profile.air=Math.max(-2.5,Math.min(2.5,base.air+analysis.highDb));
@@ -170,7 +224,7 @@ $("masterButton").addEventListener("click",async()=>{
     masteredURL=URL.createObjectURL(finalBlob);
     $("masteredPlayer").src=masteredURL;$("downloadLink").href=masteredURL;
     $("downloadLink").download=(selectedFile.name.replace(/\.[^.]+$/,"")||"EC-Audio")+"-EC-AI-Mastered-24bit.wav";
-    $("profileValue").textContent=result.profile;$("lufsValue").textContent=result.target+" dBFS RMS aprox.";$("peakValue").textContent=result.inputPeak+" dBFS";$("outputPeakValue").textContent=result.outputPeak+" dBFS";
+    $("profileValue").textContent=result.profile;$("lufsValue").textContent=result.outputLufs.toFixed(1)+" LUFS-I";$("peakValue").textContent=result.inputLufs.toFixed(1)+" LUFS-I";$("outputPeakValue").textContent=result.truePeak.toFixed(1)+" dBTP";
     $("result").classList.add("show");$("emptyResult").hidden=true;$("resultState").textContent="MASTER COMPLETADA";$("resultState").style.color="var(--lime)";setProgress(100,"Master automática terminada · ajustes finales disponibles");
   }catch(error){showError(error.message||"No se pudo masterizar esta canción.");$("resultState").textContent="ERROR";$("resultState").style.color="#ffabb7";}
   finally{if(context)try{await context.close();}catch{}busy=false;$("masterButton").disabled=!selectedFile;$("status").classList.remove("show");}
