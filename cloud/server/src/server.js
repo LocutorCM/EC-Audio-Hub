@@ -92,6 +92,7 @@ app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    res.setHeader('Access-Control-Expose-Headers', 'X-EC-Mastering-Profile, X-EC-Mastering-Target-LUFS, X-EC-Mastering-Input-Peak, X-EC-Mastering-Output-Peak, Content-Disposition');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   }
   if (req.method === 'OPTIONS') return res.sendStatus(origin && allowedOrigins.has(origin) ? 204 : 403);
