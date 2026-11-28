@@ -102,7 +102,7 @@ struct ClientView: View {
             }
             Button("Cancelar", role: .cancel) { pluginToUninstall = nil }
         } message: {
-            Text("Se eliminará este bundle AU/VST3 de /Library/Audio/Plug-Ins, aunque no proceda de EC Audio Hub. macOS solicitará autorización de administrador.")
+            Text("Se eliminará únicamente el plugin instalado y registrado por EC Audio Hub. macOS solicitará autorización de administrador.")
         }
         .task {
             await library.refresh()
