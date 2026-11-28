@@ -19,7 +19,7 @@ function setFile(file){
   if(!["wav","wave","mp3","flac","aif","aiff","m4a","aac","ogg","opus"].includes(ext)){showError("Este formato no es compatible. Selecciona WAV, MP3, FLAC, AIFF, M4A, AAC, OGG u OPUS.");return;}
   if(file.size>150*1024*1024){showError("El archivo supera el límite de 150 MB.");return;}
   selectedFile=file;$("fileName").textContent=file.name;$("fileSize").textContent=formatBytes(file.size);$("fileLine").hidden=false;
-  if(originalURL)URL.revokeObjectURL(originalURL);originalURL=URL.createObjectURL(file);$("originalPlayer").src=originalURL;$("originalPlayer").hidden=false;$("masterButton").disabled=!signedInUser||!API_BASE_URL;clearMaster();
+  if(originalURL)URL.revokeObjectURL(originalURL);originalURL=URL.createObjectURL(file);$("originalPlayer").src=originalURL;$("originalPlayer").hidden=false;$("masterButton").disabled=!API_BASE_URL;clearMaster();
 }
 $("audioFile").addEventListener("change",e=>setFile(e.target.files?.[0]));
 $("removeFile").addEventListener("click",()=>{$("audioFile").value="";setFile(null);});
@@ -58,8 +58,7 @@ $("masterButton").addEventListener("click",async()=>{
 });
 onAuthStateChanged(auth,user=>{
   signedInUser=user;
-  if(!user){$("masterButton").disabled=true;$("masterButton").textContent="INICIA SESIÓN PARA MASTERIZAR";return;}
   $("masterButton").disabled=!selectedFile||!API_BASE_URL;
-  $("masterButton").textContent=API_BASE_URL?"✦ MASTERIZAR MI CANCIÓN":"SERVIDOR EN CONFIGURACIÓN";
+  $("masterButton").textContent=!user?"INICIA SESIÓN PARA MASTERIZAR":(API_BASE_URL?"✦ MASTERIZAR MI CANCIÓN":"SERVIDOR EN CONFIGURACIÓN");
   if(!API_BASE_URL)showError("El servidor de procesamiento aún no está desplegado o configurado.");
 });
