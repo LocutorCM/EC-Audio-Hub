@@ -99,8 +99,8 @@ async function buildArrangement(input,style,tempoMode,mood,notes,onProgress){
   for(let q=0;q<4;q++){
    const bt=t+q*beat;if(bt>=duration)continue;
    addTone(ctx,bt,Math.min(beat*.85,duration-bt),midiHz(root-12),"triangle",.09,0);
-   if(q===0||q===2)addKick(ctx,bt,style==="trap"?.85:.65);
-   if(q===1||q===3)addNoise(ctx,bt,.13,style==="rock"?.25:.16,1800);
+   if(!noDrums&&(q===0||q===2))addKick(ctx,bt,style==="trap"?.85:.65);
+   if(!noDrums&&(q===1||q===3))addNoise(ctx,bt,.13,style==="rock"?.25:.16,1800);
    if(["urban","rap","trap","pop","rock","rnb"].includes(style)){
     if(!noDrums&&(q===0||q===2))addNoise(ctx,bt+beat*.5,.055,.07,7000);
    }
