@@ -58,6 +58,8 @@ final class ClientUpdater: ObservableObject {
         }
     }
 
+    func dismissUpdate() { availableUpdate = nil }
+
     func installUpdate() async {
         guard let update = availableUpdate, !isInstalling else { return }
         isInstalling = true
