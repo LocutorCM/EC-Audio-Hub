@@ -5,6 +5,7 @@ EC Audio Hub es la plataforma de distribución, cuentas y licencias para los plu
 ## Componentes
 
 - Sitio web: https://locutorcm.github.io/EC-Audio-Hub/
+- EC AI Mastering: https://locutorcm.github.io/EC-Audio-Hub/mastering.html
 - Cuenta de clientes: https://locutorcm.github.io/EC-Audio-Hub/account.html
 - Panel de licencias: https://locutorcm.github.io/EC-Audio-Hub/admin-licenses.html
 - macOS Admin: publica plugins AU/VST3 y portadas en GitHub Releases.
@@ -30,6 +31,10 @@ La prueba gratuita existente continúa siendo una demostración técnica de 60 s
 Sigue docs/COMMERCIAL-LICENSING.md. El backend necesita un servicio HTTPS persistente (el Blueprint de Render utiliza el plan Starter y un disco persistente), una cuenta Ko-fi y el token secreto del webhook configurado como variable privada del servidor.
 
 **Estado:** la integración Ko-fi ya está en main. Todavía no hay un servidor de pagos publicado ni se ha conectado el webhook de Ko-fi. La validación de licencia dentro de cada plugin cuando se carga en Logic Pro todavía requiere integrar el SDK de licencia en el código fuente de cada plugin. No vendas licencias hasta completar la configuración, esa integración y las pruebas de webhooks.
+
+## EC AI Mastering
+
+La web incluye un área de masterización de audio con perfiles DSP por género, análisis de nivel/pico, normalización EBU R128 en dos pasadas y exportación WAV 24-bit/48 kHz o MP3 320 kbps. El servicio de procesamiento usa FFmpeg en EC Audio Cloud API y autentica clientes con Firebase. Consulta `docs/AI-MASTERING-SETUP.md` para desplegarlo y probarlo. La primera versión es procesamiento DSP automatizado; no incluye todavía un modelo neuronal de clasificación automática de género.
 
 ## Compilar apps macOS
 
