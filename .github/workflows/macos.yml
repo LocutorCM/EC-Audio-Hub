@@ -25,6 +25,7 @@ jobs:
 
       - name: Create EC Audio app icon
         run: |
+          mkdir -p dist
           cat > dist/create-icon.swift <<'SWIFT'
           import AppKit
           import Foundation
