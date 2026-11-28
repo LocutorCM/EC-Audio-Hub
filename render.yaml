@@ -47,7 +47,3 @@ services:
         value: "2"
       - key: MASTERING_MAX_UPLOAD_MB
         value: "150"
-      - key: HF_TOKEN
-        sync: false
-      - key: HF_MUSIC_SPACE
-        sync: false
