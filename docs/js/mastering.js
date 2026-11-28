@@ -1,5 +1,10 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+import { firebaseConfig } from "./firebase-config.js";
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
 const $ = (id) => document.getElementById(id);
-let selectedFile = null, originalURL = null, masteredURL = null, busy = false;
+let selectedFile = null, originalURL = null, masteredURL = null, busy = false, signedInUser = null;
 const profiles = {
   auto: {name:"Adaptativo EC", target:-14, hp:28, low:0, body:0, presence:0.5, air:0.5, threshold:-20, ratio:2.3},
   urban:{name:"Urbano / Reggaetón",target:-10.5,hp:30,low:0.8,body:0.2,presence:0.4,air:0.8,threshold:-19,ratio:2.8},
@@ -74,7 +79,7 @@ async function renderMaster(input,profile,onProgress){
   return {blob:encodeWav24(finalBuffer),inputPeak:db(stats(input).peak),outputPeak:db(finalStats.peak),profile:profile.name,target:profile.target};
 }
 $("masterButton").addEventListener("click",async()=>{
-  if(!selectedFile||busy)return;clearError();busy=true;$("masterButton").disabled=true;$("resultState").textContent="PROCESANDO";
+  if(!selectedFile||busy)return;clearError();if(!signedInUser){window.location.href="./account.html?return=mastering";return;}busy=true;$("masterButton").disabled=true;$("resultState").textContent="PROCESANDO";
   let context;
   try{
     if(!window.AudioContext&&!window.webkitAudioContext)throw new Error("Este navegador no admite procesamiento de audio. Abre EC Audio desde Chrome o Safari actualizado.");
@@ -92,6 +97,8 @@ $("masterButton").addEventListener("click",async()=>{
     $("profileValue").textContent=result.profile;$("lufsValue").textContent=result.target+" dBFS RMS aprox.";$("peakValue").textContent=result.inputPeak+" dBFS";$("outputPeakValue").textContent=result.outputPeak+" dBFS";
     $("result").classList.add("show");$("emptyResult").hidden=true;$("resultState").textContent="MASTER COMPLETADA";$("resultState").style.color="var(--lime)";setProgress(100,"Master terminada");
   }catch(error){showError(error.message||"No se pudo masterizar esta canción.");$("resultState").textContent="ERROR";$("resultState").style.color="#ffabb7";}
-  finally{if(context)try{await context.close();}catch{}busy=false;$("masterButton").disabled=!selectedFile;$("status").classList.remove("show");}
+  finally{if(context)try{await context.close();}catch{}busy=false;$("masterButton").disabled=!selectedFile||!signedInUser;$("status").classList.remove("show");}
 });
 if(!window.AudioContext&&!window.webkitAudioContext){showError("Tu navegador no admite el procesamiento de audio. Actualiza Chrome o Safari para usar EC AI Mastering.");}
+
+onAuthStateChanged(auth,user=>{signedInUser=user;$("masterButton").disabled=!selectedFile||!signedInUser;$("masterButton").textContent=!user?"INICIA SESIÓN PARA MASTERIZAR":"✦ MASTERIZAR MI CANCIÓN";});
