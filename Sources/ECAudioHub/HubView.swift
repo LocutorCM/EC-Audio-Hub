@@ -9,10 +9,14 @@ struct HubView: View {
     private let panel = Color(red: 0.075, green: 0.085, blue: 0.135)
     private let lime = Color(red: 0.78, green: 1.0, blue: 0.37)
     private let violet = Color(red: 0.65, green: 0.55, blue: 1.0)
+    private var studioArtwork: NSImage? {
+        guard let url = Bundle.module.url(forResource: "ECStudioHero", withExtension: "svg") else { return nil }
+        return NSImage(contentsOf: url)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
+            ZStack {\n                if let artwork = studioArtwork {\n                    Image(nsImage: artwork).resizable().scaledToFill().overlay(Color.black.opacity(0.48))\n                }\n                HStack(spacing: 12) {
                 Image(systemName: "waveform").font(.system(size: 24, weight: .bold)).foregroundColor(bg)
                     .frame(width: 46, height: 46).background(LinearGradient(colors: [lime, violet], startPoint: .topLeading, endPoint: .bottomTrailing)).cornerRadius(14)
                 VStack(alignment: .leading, spacing: 3) {
@@ -24,8 +28,7 @@ struct HubView: View {
                     Label("GITHUB CONECTADO", systemImage: "checkmark.circle.fill").font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundColor(.green)
                     Button("Desconectar") { uploader.logout() }.buttonStyle(.plain).foregroundColor(.secondary)
                 }
-            }.padding(24)
-            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
+                }.padding(24)\n            }.frame(height: 94).clipped()\n            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
             if uploader.isAuthenticated { publisher } else { connection }
             HStack {
                 Text("EC AUDIO • ADMINISTRADOR PRIVADO")
