@@ -43,10 +43,10 @@ function installInstrumentalApi(app, { db, customerAuth, adminEmail = '' }) {
     if (!authorized(req, res)) return;
     try {
       const r = await providerFetch('/health', { signal: AbortSignal.timeout(12000) });
-      if (!r.ok) return res.json({ available: false, provider: 'ACE-Step ZeroGPU', message: r.status === 503 ? 'ACE-Step está iniciando o temporalmente ocupado. Vuelve a comprobar en un momento.' : 'El motor online respondió con HTTP ' + r.status + '.' });
+      if (!r.ok) return res.json({ available: true, providerReady: false, provider: 'ACE-Step ZeroGPU', message: r.status === 503 ? 'ACE-Step está despertando o temporalmente ocupado. Puedes enviar la solicitud; quizá deba reintentarse.' : 'El motor online respondió con HTTP ' + r.status + '. Puedes intentar y EC Audio mostrará el error si sigue sin responder.' });
       return res.json({ available: true, provider: 'ACE-Step ZeroGPU', hourlyLimit: HOURLY_LIMIT });
     } catch {
-      return res.json({ available: false, provider: 'ACE-Step ZeroGPU', message: 'No se pudo conectar con el motor gratuito. Puede estar iniciando o temporalmente fuera de servicio.' });
+      return res.json({ available: true, providerReady: false, provider: 'ACE-Step ZeroGPU', message: 'No se pudo comprobar el estado del motor gratuito. Puedes intentar generar; si no responde, vuelve a intentarlo más tarde.' });
     }
   });
 
