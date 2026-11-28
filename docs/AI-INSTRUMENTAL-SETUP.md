@@ -1,45 +1,27 @@
-# EC AI Instrumental Studio — Cloud AI and separated tracks
+# EC AI Instrumental Studio — ACE-Step + Demucs
 
-The instrumental creator is served by GitHub Pages and sends generation requests to the existing EC Audio Cloud API on Render. The API keeps the fal.ai API key on the server; it is never exposed to the browser.
+EC Audio Pages remains the user interface. The authenticated Render API sends voice references to the EC Audio Hugging Face Space. GitHub Actions deploys the Space source from this repository.
 
-## Pipeline
+## One-time configuration
+1. Create a Hugging Face Space named `ec-audio-music-engine`, SDK Gradio. Select ZeroGPU hardware if your account is eligible.
+2. Create a Hugging Face write token for that Space.
+3. In GitHub repository Settings → Secrets and variables → Actions, add:
+   - `HF_TOKEN`: Hugging Face token with permission to push to the Space.
+   - `HF_SPACE_ID`: `username/ec-audio-music-engine`.
+4. In Render service `ec-audio-cloud`, add private environment variables:
+   - `HF_TOKEN`: token with permission to access the Space.
+   - `HF_MUSIC_SPACE`: `username/ec-audio-music-engine`.
+5. Redeploy Render. Run the GitHub Actions workflow `Deploy EC Audio Music Engine`.
 
-1. The customer signs in with the existing EC Audio Firebase account.
-2. The customer uploads a solo vocal recording and explicitly consents to sending it to the external AI provider.
-3. The server uploads the reference audio to fal.ai and calls ACE-Step Audio-to-Audio (fal-ai/ace-step/audio-to-audio) to create an instrumental backing track.
-4. The server converts the generated instrumental to stereo MP3 at 192 kbps and sends it to Mureka Stem Separation (mureka/api/song/stem).
-5. The API returns the complete instrumental as an authenticated download and the separated tracks as the provider's ZIP archive.
+The GitHub workflow deploys the Space code; Render calls the Space. Neither secret is placed in the public website.
 
-The frontend polls the authenticated job endpoint. Its percentage represents completed pipeline milestones (upload, composition, stem separation and completion), not the neural network's internal sampling percentage.
+## Models and capabilities
+ACE-Step 1.5 is MIT-licensed. The Space uses its documented `complete` task with the uploaded voice as source audio and asks the model to add drums, bass, guitar, keyboard, strings and percussion. It uses the Base model because ACE-Step documents `complete`, `lego` and `extract` as Base-only tasks. Demucs `htdemucs_6s` then attempts to separate the resulting mix into vocals, drums, bass, guitar, piano and other. Stem quality varies and piano separation may contain artifacts.
 
-## Required server configuration
+This does not guarantee exact note-for-note or beat-perfect following of the singer. The UI should describe it as AI-assisted arrangement from a vocal reference.
 
-The root render.yaml already defines the existing ec-audio-cloud service and the private FAL_KEY environment variable.
+## Free-tier limitations
+Hugging Face ZeroGPU is shared GPU compute with queueing, eligibility requirements and a daily free allowance. It is not an unlimited, dedicated free GPU. Model initialization and a complete + separation run may exceed the available free runtime. If the free Space cannot complete jobs reliably, use a locally hosted ACE-Step instance or a paid GPU host; do not fall back to fal.ai automatically.
 
-1. Open the Render Dashboard and select ec-audio-cloud.
-2. Set FAL_KEY to an API key from https://fal.ai/dashboard/keys. Keep it in Render only; never put it in GitHub, HTML or browser JavaScript.
-3. Keep FIREBASE_API_KEY, FIREBASE_PROJECT_ID=ec-audio-accounts, JWT_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD, and the existing CORS origin configured.
-4. Deploy the latest main branch and wait for /health to return ok: true.
-5. Open /api/instrumental/status after signing in through the EC Audio page. The endpoint requires a customer session.
-
-Optional environment variable:
-
-- FAL_STEM_MODEL=audio-separation-3 (default). The other provider models are audio-separation-1 and audio-separation-2; their available separation outputs and current prices are set by fal.ai.
-
-## Provider costs and limits
-
-- ACE-Step Audio-to-Audio currently lists a price of US$0.0002 per second of generated audio. See https://fal.ai/models/fal-ai/ace-step/audio-to-audio/api.
-- Mureka Stem Separation currently lists US$0.20 per song for audio-separation-3, US$0.06 for audio-separation-1, and US$0.70 for audio-separation-2. See https://fal.ai/models/mureka/api/song/stem/api.
-- Provider prices can change. fal.ai bills the connected account directly; EC Audio does not set or collect these model charges.
-- Mureka accepts MP3/M4A input up to 10 MB. The server converts the generated instrumental to MP3 and checks the limit before submitting stem separation.
-- The current EC Audio endpoint accepts up to 50 MB of voice input and limits each account/IP to three generations per hour.
-
-## Progress and track delivery
-
-The UI reports actual pipeline stages: voice upload, ACE-Step composition, stem separation, and finished downloads. The provider does not expose a reliable per-instrument progress percentage for piano, drums, bass or guitar. It returns a ZIP containing the stems it can separate; the exact track list depends on the provider's separation model and the audio. EC Audio therefore does not display fabricated instrument-by-instrument progress or promise that every instrument will always be isolated.
-
-If stem separation fails after the instrumental has been generated, the job is marked partial and the complete instrumental remains downloadable.
-
-## Privacy
-
-The voice file is sent to fal.ai storage for generation. The generated mix is downloaded to temporary storage on the EC Audio Cloud server; the temporary working directory is removed after one hour. The ZIP is delivered from the provider's result URL. Review the provider's current privacy and retention terms before using recordings containing confidential or third-party material.
+## Security and retention
+Voice recordings are sent to the Hugging Face Space after the user explicitly consents. Temporary job files are stored by the Render API and deleted after approximately one hour. Never add HF tokens to GitHub source, frontend JavaScript or HTML.
