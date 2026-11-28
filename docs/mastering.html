@@ -34,6 +34,14 @@ footer{border-top:1px solid #ffffff12;padding:24px 0;color:#777e91;font-size:9px
 <div class="fileline" id="fileLine" hidden><div class="fileicon">♫</div><div class="filemeta"><b id="fileName"></b><small id="fileSize"></small></div><button class="remove" id="removeFile" type="button" aria-label="Quitar archivo">×</button></div>
 <audio id="originalPlayer" controls hidden style="width:100%;height:38px;margin-top:12px"></audio>
 <div class="formrow"><div><label for="genre">Género musical</label><select id="genre"><option value="auto">Automático / equilibrado</option><option value="urban">Urbano / reggaetón</option><option value="rap">Rap / hip-hop</option><option value="pop">Pop</option><option value="rock">Rock</option><option value="worship">Adoración / música cristiana</option><option value="ballad">Balada</option><option value="electronic">Electrónica</option><option value="acoustic">Acústica</option></select></div><div><label for="format">Formato de salida</label><select id="format"><option value="wav">WAV · 24-bit / 48 kHz</option></select></div></div>
+<div class="formrow">
+<div><label for="compRatio">Compresión · ratio <output id="ratioValue">2.3:1</output></label><input id="compRatio" type="range" min="1" max="6" step=".1" value="2.3" style="width:100%;accent-color:var(--lime)"></div>
+<div><label for="stereoWidth">Ampliación estéreo <output id="widthValue">100%</output></label><input id="stereoWidth" type="range" min="0" max="150" step="1" value="100" style="width:100%;accent-color:var(--lime)"></div>
+</div>
+<div class="formrow">
+<div><label for="eqLow">EQ graves <output id="lowValue">0 dB</output></label><input id="eqLow" type="range" min="-4" max="4" step=".1" value="0" style="width:100%;accent-color:var(--lime)"></div>
+<div><label for="eqHigh">EQ brillo <output id="highValue">0 dB</output></label><input id="eqHigh" type="range" min="-4" max="4" step=".1" value="0" style="width:100%;accent-color:var(--lime)"></div>
+</div>
 <button class="primary" id="masterButton" type="button" disabled>✦ MASTERIZAR MI CANCIÓN</button>
 <p class="note">Procesamiento local en tu navegador. El archivo original no se envía a EC Audio ni a Render.</p>
 <div class="status" id="status"><div class="statushead"><span id="statusText">Preparando audio…</span><b id="statusPercent">0%</b></div><div class="progress"><i id="progressBar"></i></div></div>
