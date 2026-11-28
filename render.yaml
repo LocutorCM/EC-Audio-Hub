@@ -47,3 +47,5 @@ services:
         value: "2"
       - key: MASTERING_MAX_UPLOAD_MB
         value: "150"
+      - key: FAL_KEY
+        sync: false
