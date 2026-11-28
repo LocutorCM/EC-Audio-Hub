@@ -26,6 +26,7 @@ voiceInput.addEventListener("change", async () => {
     const ctx = new AudioContext();
     referenceBuffer = await ctx.decodeAudioData(await file.arrayBuffer());
     const analysis = analyzeReference(referenceBuffer, ctx.sampleRate);
+    referenceEnergy = analysis.energy;
     if (analysis.bpm) $("bpm").value = analysis.bpm;
     setMessage("Audio analizado en este dispositivo · tempo estimado " + (analysis.bpm || "no detectado") + " BPM · energía " + analysis.energy + ". No se ha subido.");
     await ctx.close();
@@ -115,6 +116,8 @@ async function compose() {
   const seedText=$("prompt").value+genre+mood+bpm;
   let seed=0;for(let i=0;i<seedText.length;i++)seed=(seed*31+seedText.charCodeAt(i))>>>0;
   const random=seeded(seed||12345);
+  // Scale drum dynamics from the optional local reference analysis.
+  const energyScale = referenceEnergy === "suave" ? 0.78 : referenceEnergy === "alta" ? 1.15 : 1;
   const sr=44100, frames=Math.ceil(seconds*sr);
   const ctx=new OfflineAudioContext(2,frames,sr);
   const master=ctx.createGain();master.gain.value=.72;
